@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Package a relocatable macOS .app + zip for distribution.
+# Package a relocatable macOS .app + Apple Silicon DMG for distribution.
 # Usage: package-macos-app.sh <binary> <data-dir> <out-dir> [arch-label]
 set -euo pipefail
 
@@ -11,8 +11,8 @@ ARCH_LABEL="${4:-$(uname -m)}"
 
 APP_NAME="Stunt Car Racer for Lovers"
 BUNDLE_ID="com.lovers.stuntcarracer"
-ZIP_NAME="StuntCarRacerForLovers-macOS-${ARCH_LABEL}.zip"
-ZIP_PATH="${OUT_DIR}/${ZIP_NAME}"
+DMG_NAME="StuntCarRacerForLovers-macOS-${ARCH_LABEL}.dmg"
+DMG_PATH="${OUT_DIR}/${DMG_NAME}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STAGE="${OUT_DIR}/stage-${ARCH_LABEL}"
@@ -41,9 +41,7 @@ if [[ -f "${ICON_SRC}" ]] && command -v sips >/dev/null && command -v iconutil >
   TMP="$(mktemp -d)"
   ICONSET="${TMP}/AppIcon.iconset"
   mkdir -p "${ICONSET}"
-  # iconutil requires exact iconset filenames.
   sips -z 16 16 "${ICON_SRC}" --out "${ICONSET}/icon_16x16.png" >/dev/null
-  sips -z 32 32 "${ICON_SRC}" --out "${ICONSET}/diana@2x_dummy.png" >/dev/null
   sips -z 32 32 "${ICON_SRC}" --out "${ICONSET}/icon_16x16@2x.png" >/dev/null
   sips -z 32 32 "${ICON_SRC}" --out "${ICONSET}/icon_32x32.png" >/dev/null
   sips -z 64 64 "${ICON_SRC}" --out "${ICONSET}/icon_32x32@2x.png" >/dev/null
@@ -53,7 +51,6 @@ if [[ -f "${ICON_SRC}" ]] && command -v sips >/dev/null && command -v iconutil >
   sips -z 512 512 "${ICON_SRC}" --out "${ICONSET}/icon_256x256@2x.png" >/dev/null
   sips -z 512 512 "${ICON_SRC}" --out "${ICONSET}/icon_512x512.png" >/dev/null
   sips -z 1024 1024 "${ICON_SRC}" --out "${ICONSET}/icon_512x512@2x.png" >/dev/null
-  rm -f "${ICONSET}/diana@2x_dummy.png"
   if iconutil -c icns "${ICONSET}" -o "${RES}/AppIcon.icns" 2>/dev/null; then
     echo "Embedded AppIcon.icns"
   fi
@@ -98,10 +95,10 @@ ${ICON_XML}
 EOF
 
 cat > "${STAGE}/HOW-TO-OPEN.txt" <<'EOF'
-Stunt Car Racer for Lovers — macOS
+Stunt Car Racer for Lovers — macOS (Apple Silicon)
 
-1. Unzip this archive.
-2. Drag "Stunt Car Racer for Lovers.app" into Applications (optional).
+1. Open this disk image.
+2. Drag "Stunt Car Racer for Lovers.app" into Applications.
 3. First launch: right-click the app → Open → Open
    (required once — the build is not Apple-notarized).
 
@@ -110,11 +107,23 @@ Controls: U Amiga+ physics · I Speed feel · O Enhanced Look · P Pause
 Play in browser: https://nmarchand73.github.io/StuntCarRacerForLovers/play/
 EOF
 
-rm -f "${ZIP_PATH}"
-(
-  cd "${STAGE}"
-  zip -ry "${ZIP_PATH}" "${APP_NAME}.app" HOW-TO-OPEN.txt
-)
+# DMG layout: app + Applications shortcut + readme
+DMG_ROOT="${OUT_DIR}/dmgroot-${ARCH_LABEL}"
+rm -rf "${DMG_ROOT}"
+mkdir -p "${DMG_ROOT}"
+cp -R "${APP}" "${DMG_ROOT}/"
+cp "${STAGE}/HOW-TO-OPEN.txt" "${DMG_ROOT}/"
+ln -s /Applications "${DMG_ROOT}/Applications"
 
-echo "Packaged ${ZIP_PATH}"
-ls -lh "${ZIP_PATH}"
+rm -f "${DMG_PATH}"
+hdiutil create \
+  -volname "${APP_NAME}" \
+  -srcfolder "${DMG_ROOT}" \
+  -ov \
+  -format UDZO \
+  "${DMG_PATH}"
+
+rm -rf "${DMG_ROOT}"
+
+echo "Packaged ${DMG_PATH}"
+ls -lh "${DMG_PATH}"

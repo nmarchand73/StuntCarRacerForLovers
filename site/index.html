@@ -310,12 +310,12 @@
 
     <div class="cta-row">
       <a class="btn btn-primary" href="play/">Play in browser</a>
-      <a class="btn btn-ghost" id="dl-primary" href="download/StuntCarRacerForLovers-macOS-arm64.zip">
-        Download for Mac
+      <a class="btn btn-ghost" id="dl-primary" href="download/StuntCarRacerForLovers-macOS-arm64.dmg">
+        Download Mac DMG
       </a>
     </div>
     <p class="meta" id="dl-meta">
-      Free web build hosted here · Mac <strong>.app</strong> (Apple Silicon / Intel) —
+      Free web build hosted here · Apple Silicon <strong>.dmg</strong> —
       right-click → Open the first time (unsigned).
       <span class="build-stamp" id="build-stamp"></span>
     </p>
@@ -356,21 +356,19 @@
     <p class="lead">The same Enhanced Look build runs in your browser — no install. Best with a keyboard or gamepad.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="play/">Launch web game</a>
-      <a class="btn btn-ghost" id="dl-primary" href="download/StuntCarRacerForLovers-macOS-arm64.zip">Download for Mac</a>
     </div>
   </section>
 
   <section class="wrap" id="install">
     <h2>Install on Mac</h2>
     <ol class="steps">
-      <li>Download the <strong>Apple Silicon</strong> zip (or Intel build below if you need it).</li>
-      <li>Unzip, then optionally drag the app into <strong>Applications</strong>.</li>
+      <li>Download the <strong>Apple Silicon DMG</strong>.</li>
+      <li>Open it and drag the app into <strong>Applications</strong>.</li>
       <li><strong>Right-click → Open</strong> the first time (Gatekeeper — builds are not notarized).</li>
       <li>Race. Toggle <kbd>O</kbd> for Enhanced Look.</li>
     </ol>
     <div class="cta-row" style="margin-top:1.5rem">
-      <a class="btn btn-ghost" id="dl-arm" href="download/StuntCarRacerForLovers-macOS-arm64.zip">Apple Silicon</a>
-      <a class="btn btn-ghost" id="dl-intel" href="download/StuntCarRacerForLovers-macOS-x86_64.zip">Intel Mac</a>
+      <a class="btn btn-ghost" id="dl-dmg" href="download/StuntCarRacerForLovers-macOS-arm64.dmg">Download Apple Silicon DMG</a>
     </div>
   </section>
 
@@ -400,12 +398,10 @@
         if (info.version) parts.push(info.version);
         if (info.built_at) parts.push(info.built_at);
         if (parts.length) stamp.textContent = " · " + parts.join(" · ");
-        if (info.arm64) {
-          document.getElementById("dl-primary").href = info.arm64;
-          document.getElementById("dl-arm").href = info.arm64;
-        }
-        if (info.x86_64) {
-          document.getElementById("dl-intel").href = info.x86_64;
+        if (info.dmg || info.arm64) {
+          var href = info.dmg || info.arm64;
+          document.getElementById("dl-primary").href = href;
+          document.getElementById("dl-dmg").href = href;
         }
       })
       .catch(function () {});

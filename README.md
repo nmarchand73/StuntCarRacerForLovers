@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/play/"><img src="https://img.shields.io/badge/Play-in%20browser-5599ff?style=for-the-badge" alt="Play in browser"></a>
   &nbsp;
-  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/"><img src="https://img.shields.io/badge/Download-Mac%20.app-ff7a18?style=for-the-badge" alt="Download for Mac"></a>
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/"><img src="https://img.shields.io/badge/Download-Mac%20DMG-ff7a18?style=for-the-badge" alt="Download Mac DMG"></a>
   &nbsp;
   <a href="https://github.com/nmarchand73/StuntCarRacerForLovers"><img src="https://img.shields.io/badge/GitHub-repo-161c28?style=for-the-badge&logo=github" alt="GitHub"></a>
 </p>
@@ -31,7 +31,7 @@
 
 **Play in browser:** → **[nmarchand73.github.io/StuntCarRacerForLovers/play](https://nmarchand73.github.io/StuntCarRacerForLovers/play/)**  
 
-**Mac download:** → **[Landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/)** (Apple Silicon + Intel `.app` zips)
+**Mac download:** → **[Landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/)** (Apple Silicon `.dmg`)
 
 **From source:**
 
@@ -53,13 +53,13 @@ python3 -m http.server -d build-web 8080
 
 Pushing to `master` runs [`.github/workflows/publish-macos.yml`](.github/workflows/publish-macos.yml):
 
-1. Builds Release on `macos-14` (arm64) and `macos-13` (x86_64) → `.app` zips  
+1. Builds Release on `macos-14` (Apple Silicon) → `.dmg`  
 2. Builds the **Emscripten web** game → `/play/`  
 3. Deploys the landing page + downloads + web build to **GitHub Pages**
 
 One-time repo setup: **Settings → Pages → Source: GitHub Actions**.
 
-Local Mac package smoke test:
+Local Mac DMG smoke test:
 
 ```bash
 ./scripts/package-macos-app.sh build/stuntcarracer data /tmp/scr-dist arm64
