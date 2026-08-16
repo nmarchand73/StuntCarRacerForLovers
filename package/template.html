@@ -9,6 +9,10 @@
     <style type="text/css">
       html, body {
         margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
       }
       .emscripten {
         width: 100%;
@@ -22,6 +26,8 @@
         width: 100%;
         height: 100%;
         display: block;
+        outline: none;
+        touch-action: none;
       }
       .loading {
         position: absolute;
@@ -113,19 +119,39 @@
             ArrowRight: 1073741903,
             ArrowUp: 1073741906,
             ArrowDown: 1073741905,
+            Enter: 13,
             Space: 32,
             ShiftLeft: 1073742049,
             ShiftRight: 1073742053
         };
+        function isWebArrowEvent(e) {
+            var key = e.key || '';
+            var code = e.code || '';
+            return key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown'
+                || key === 'Left' || key === 'Right' || key === 'Up' || key === 'Down'
+                || key === 'UIKeyInputLeftArrow' || key === 'UIKeyInputRightArrow'
+                || key === 'UIKeyInputUpArrow' || key === 'UIKeyInputDownArrow'
+                || code === 'ArrowLeft' || code === 'ArrowRight' || code === 'ArrowUp' || code === 'ArrowDown';
+        }
         function sdlKeyFromWebEvent(e) {
-            if (e.key === 'ArrowLeft') return SDL_WEB_KEYS.ArrowLeft;
-            if (e.key === 'ArrowRight') return SDL_WEB_KEYS.ArrowRight;
-            if (e.key === 'ArrowUp') return SDL_WEB_KEYS.ArrowUp;
-            if (e.key === 'ArrowDown') return SDL_WEB_KEYS.ArrowDown;
-            if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar') return SDL_WEB_KEYS.Space;
-            if (e.code === 'ShiftLeft') return SDL_WEB_KEYS.ShiftLeft;
-            if (e.code === 'ShiftRight') return SDL_WEB_KEYS.ShiftRight;
-            if (e.key === 'Shift') return e.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT ? SDL_WEB_KEYS.ShiftRight : SDL_WEB_KEYS.ShiftLeft;
+            var key = e.key || '';
+            var code = e.code || '';
+            // Prefer code: Safari/WebKit often reports built-in arrows with location=numpad
+            // and a less reliable key/keyCode than Chrome.
+            if (code === 'ArrowLeft' || key === 'ArrowLeft' || key === 'Left' || key === 'UIKeyInputLeftArrow')
+                return SDL_WEB_KEYS.ArrowLeft;
+            if (code === 'ArrowRight' || key === 'ArrowRight' || key === 'Right' || key === 'UIKeyInputRightArrow')
+                return SDL_WEB_KEYS.ArrowRight;
+            if (code === 'ArrowUp' || key === 'ArrowUp' || key === 'Up' || key === 'UIKeyInputUpArrow')
+                return SDL_WEB_KEYS.ArrowUp;
+            if (code === 'ArrowDown' || key === 'ArrowDown' || key === 'Down' || key === 'UIKeyInputDownArrow')
+                return SDL_WEB_KEYS.ArrowDown;
+            if (code === 'Enter' || code === 'NumpadEnter' || key === 'Enter' || key === 'Return')
+                return SDL_WEB_KEYS.Enter;
+            if (code === 'Space' || key === ' ' || key === 'Spacebar') return SDL_WEB_KEYS.Space;
+            if (code === 'ShiftLeft') return SDL_WEB_KEYS.ShiftLeft;
+            if (code === 'ShiftRight') return SDL_WEB_KEYS.ShiftRight;
+            if (key === 'Shift') return e.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT ? SDL_WEB_KEYS.ShiftRight : SDL_WEB_KEYS.ShiftLeft;
             switch (e.keyCode || e.which || 0) {
             case 37:
             case 63234:
@@ -139,6 +165,8 @@
             case 40:
             case 63233:
                 return SDL_WEB_KEYS.ArrowDown;
+            case 13:
+                return SDL_WEB_KEYS.Enter;
             case 32:
                 return SDL_WEB_KEYS.Space;
             case 16:
@@ -146,15 +174,71 @@
             }
             return 0;
         }
+        function pushWebKeyboardKey(sdlKey, pressed) {
+            if (typeof Module === 'undefined' || !Module.calledRun || !Module._SetWebKeyboardKey) return;
+            Module._SetWebKeyboardKey(sdlKey, pressed ? 1 : 0);
+        }
         function bridgeWebKeyboardEvent(e, pressed) {
+            if (e._scrWebKeyBridged) return false;
             if (isKeyboardControlTarget(e.target)) return false;
             var sdlKey = sdlKeyFromWebEvent(e);
             if (!sdlKey) return false;
+            e._scrWebKeyBridged = true;
             focusGameCanvas();
-            if (typeof Module !== 'undefined' && Module.calledRun && Module._SetWebKeyboardKey) Module._SetWebKeyboardKey(sdlKey, pressed ? 1 : 0);
-            e.preventDefault();
+            pushWebKeyboardKey(sdlKey, pressed);
+            if (e.cancelable) e.preventDefault();
             return true;
         }
+        // Safari/WebKit: laptop arrow keys often arrive with location=3 (numpad). Emscripten/SDL
+        // ignores those for direction input; remap to location 0 and feed our bridge directly.
+        (function installSafariArrowRemap() {
+            var ua = navigator.userAgent || '';
+            if (!/AppleWebKit/i.test(ua) || /Chrome|Chromium|Edg\//i.test(ua)) return;
+            function synthesizeArrowWithLocation0(orig) {
+                try {
+                    var ev = new KeyboardEvent(orig.type, {
+                        key: orig.key,
+                        code: orig.code,
+                        location: 0,
+                        repeat: orig.repeat,
+                        ctrlKey: orig.ctrlKey,
+                        shiftKey: orig.shiftKey,
+                        altKey: orig.altKey,
+                        metaKey: orig.metaKey,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    try {
+                        Object.defineProperty(ev, 'which', { get: function() { return orig.which; } });
+                        Object.defineProperty(ev, 'keyCode', { get: function() { return orig.keyCode; } });
+                    } catch (ignored) {}
+                    ev._scrWebKeyBridged = false;
+                    return ev;
+                } catch (err) {
+                    return null;
+                }
+            }
+            function remapArrowLocationCapture(e) {
+                if (!isWebArrowEvent(e)) return;
+                if (e.cancelable) e.preventDefault();
+                // DOM_KEY_LOCATION_NUMPAD is 3; some WebKit builds also use 4 for laptop arrows.
+                if (e.location !== 3 && e.location !== 4) return;
+                var pressed = (e.type === 'keydown');
+                var sdlKey = sdlKeyFromWebEvent(e);
+                if (sdlKey) {
+                    e._scrWebKeyBridged = true;
+                    focusGameCanvas();
+                    pushWebKeyboardKey(sdlKey, pressed);
+                }
+                var syn = synthesizeArrowWithLocation0(e);
+                if (!syn) return;
+                e.stopImmediatePropagation();
+                var target = document.getElementById('canvas') || e.target || document;
+                target.dispatchEvent(syn);
+            }
+            document.addEventListener('keydown', remapArrowLocationCapture, true);
+            document.addEventListener('keyup', remapArrowLocationCapture, true);
+        })();
         var Module = {
             print(text) {
                 console.log(Array.prototype.slice.call(arguments).join(' '));
@@ -190,8 +274,16 @@
             setTimeout(focusGameCanvas, 0);
             setTimeout(focusGameCanvas, 250);
         }, true);
-        document.addEventListener('keydown', function(e) { bridgeWebKeyboardEvent(e, true); }, { passive: false, capture: true });
-        document.addEventListener('keyup', function(e) { bridgeWebKeyboardEvent(e, false); }, { passive: false, capture: true });
+        function onWebKeyDown(e) { bridgeWebKeyboardEvent(e, true); }
+        function onWebKeyUp(e) { bridgeWebKeyboardEvent(e, false); }
+        document.addEventListener('keydown', onWebKeyDown, { passive: false, capture: true });
+        document.addEventListener('keyup', onWebKeyUp, { passive: false, capture: true });
+        window.addEventListener('keydown', onWebKeyDown, { passive: false, capture: true });
+        window.addEventListener('keyup', onWebKeyUp, { passive: false, capture: true });
+        if ($game) {
+            $game.addEventListener('keydown', onWebKeyDown, { passive: false });
+            $game.addEventListener('keyup', onWebKeyUp, { passive: false });
+        }
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() { resize(); focusGameCanvas(); });
         } else {

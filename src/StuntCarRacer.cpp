@@ -2953,16 +2953,26 @@ bool process_events() {
             break;
         case SDL_KEYUP:
 #ifdef __EMSCRIPTEN__
-            /* On web, menu Left/Right are latched via SetWebKeyboardKey; do not clear them here
-               or short taps vanish before HandleTrackMenu runs. */
-            if (!((GameMode == TRACK_MENU || GameMode == TRACK_PREVIEW) &&
-                  (event.key.keysym.sym == SDLK_LEFT || event.key.keysym.sym == SDLK_RIGHT ||
-                   event.key.keysym.sym == SDLK_UP || event.key.keysym.sym == SDLK_DOWN ||
-                   event.key.keysym.sym == SDLK_RETURN)))
-#endif
+            /* On web, menu nav is latched via SetWebKeyboardKey. Safari may deliver SDL KEYUP with
+               a different sym than the JS bridge latched (numpad-location arrows), which would
+               wipe Left/Right before HandleTrackMenu / HandleTrackPreview consume them. */
+            {
+                const bool menuScreen = (GameMode == TRACK_MENU || GameMode == TRACK_PREVIEW);
+                const bool latchedMenuKey =
+                    (keyPress == SDLK_LEFT || keyPress == SDLK_RIGHT || keyPress == SDLK_UP ||
+                     keyPress == SDLK_DOWN || keyPress == SDLK_RETURN);
+                const bool eventMenuKey =
+                    (event.key.keysym.sym == SDLK_LEFT || event.key.keysym.sym == SDLK_RIGHT ||
+                     event.key.keysym.sym == SDLK_UP || event.key.keysym.sym == SDLK_DOWN ||
+                     event.key.keysym.sym == SDLK_RETURN);
+                if (!(menuScreen && (latchedMenuKey || eventMenuKey)))
+                    keyPress = 0;
+            }
+#else
             {
                 keyPress = 0;
             }
+#endif
             switch (event.key.keysym.sym) {
             // controls for Car Behaviour, Player 1
             case SDLK_LEFT:
