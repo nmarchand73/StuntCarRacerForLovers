@@ -1,4 +1,4 @@
-name: Publish Mac + GitHub Pages
+name: Publish Mac, Web & GitHub Pages
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: publish-mac-pages
+  group: publish-pages
   cancel-in-progress: true
 
 jobs:
@@ -54,9 +54,53 @@ jobs:
           path: dist/StuntCarRacerForLovers-macOS-${{ matrix.arch }}.zip
           if-no-files-found: error
 
+  build-web:
+    name: Build Web (Emscripten)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: 3.1.74
+          actions-cache-folder: emsdk-cache
+
+      - name: Verify emcc
+        run: emcc -v
+
+      - name: Configure
+        run: emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-web --config Release --parallel 4
+
+      - name: Collect playable files
+        run: |
+          set -euo pipefail
+          mkdir -p web-dist
+          # Emscripten emits html/js/wasm + optional .data preload pack
+          for f in stuntcarracer.html stuntcarracer.js stuntcarracer.wasm stuntcarracer.data \
+                   stuntcarracer.wasm.map icon.png icon256.png; do
+            if [[ -f "build-web/${f}" ]]; then
+              cp "build-web/${f}" web-dist/
+            fi
+          done
+          # Clean URL: /play/ loads the game
+          cp web-dist/stuntcarracer.html web-dist/index.html
+          ls -lh web-dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-play
+          path: web-dist/
+          if-no-files-found: error
+
   pages:
     name: Deploy GitHub Pages
-    needs: build-mac
+    needs: [build-mac, build-web]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -69,19 +113,26 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: mac-*
-          path: artifacts
+          path: artifacts/mac
           merge-multiple: true
+
+      - name: Download Web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-play
+          path: artifacts/web
 
       - name: Assemble site
         run: |
           set -euo pipefail
           SITE_OUT=_site
-          mkdir -p "${SITE_OUT}/download" "${SITE_OUT}/assets"
+          mkdir -p "${SITE_OUT}/download" "${SITE_OUT}/assets" "${SITE_OUT}/play"
           cp site/index.html "${SITE_OUT}/"
           touch "${SITE_OUT}/.nojekyll"
           cp data/Bitmap/icon.png "${SITE_OUT}/assets/icon.png"
           cp package/icon256.png "${SITE_OUT}/assets/icon256.png" 2>/dev/null || true
-          cp artifacts/*.zip "${SITE_OUT}/download/"
+          cp artifacts/mac/*.zip "${SITE_OUT}/download/"
+          cp -R artifacts/web/. "${SITE_OUT}/play/"
 
           SHA="$(git rev-parse --short HEAD)"
           BUILT_AT="$(date -u +%Y-%m-%d)"
@@ -93,9 +144,12 @@ jobs:
             "built_at": "${BUILT_AT}",
             "arm64": "download/StuntCarRacerForLovers-macOS-arm64.zip",
             "x86_64": "download/StuntCarRacerForLovers-macOS-x86_64.zip",
+            "play": "play/",
           }, indent=2) + "\n")
           PY
-          ls -lhR "${SITE_OUT}"
+          echo "=== site tree ==="
+          find "${SITE_OUT}" -maxdepth 3 -type f | sort
+          ls -lh "${SITE_OUT}/play" "${SITE_OUT}/download"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -109,19 +163,33 @@ jobs:
   release:
     name: Attach Mac zips to release (tags only)
     if: startsWith(github.ref, 'refs/tags/')
-    needs: build-mac
+    needs: [build-mac, build-web]
     runs-on: ubuntu-latest
     steps:
       - name: Download Mac zips
         uses: actions/download-artifact@v4
         with:
           pattern: mac-*
-          path: artifacts
+          path: artifacts/mac
           merge-multiple: true
+
+      - name: Download Web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-play
+          path: artifacts/web
+
+      - name: Zip web play bundle
+        run: |
+          cd artifacts/web
+          zip -r ../StuntCarRacerForLovers-web.zip .
+          ls -lh ../StuntCarRacerForLovers-web.zip
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.zip
+          files: |
+            artifacts/mac/*.zip
+            artifacts/StuntCarRacerForLovers-web.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

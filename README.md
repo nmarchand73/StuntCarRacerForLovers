@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/"><img src="https://img.shields.io/badge/Download-Mac%20.app-ff7a18?style=for-the-badge" alt="Download for Mac"></a>
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/play/"><img src="https://img.shields.io/badge/Play-in%20browser-5599ff?style=for-the-badge" alt="Play in browser"></a>
   &nbsp;
-  <a href="https://retro-foundry.github.io/multistuntcar/"><img src="https://img.shields.io/badge/Play-in%20browser-5599ff?style=for-the-badge" alt="Play in browser"></a>
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/"><img src="https://img.shields.io/badge/Download-Mac%20.app-ff7a18?style=for-the-badge" alt="Download for Mac"></a>
   &nbsp;
   <a href="https://github.com/nmarchand73/StuntCarRacerForLovers"><img src="https://img.shields.io/badge/GitHub-repo-161c28?style=for-the-badge&logo=github" alt="GitHub"></a>
 </p>
@@ -29,8 +29,9 @@
 
 ## Quick start
 
-**Mac (download):** → **[nmarchand73.github.io/StuntCarRacerForLovers](https://nmarchand73.github.io/StuntCarRacerForLovers/)**  
-Apple Silicon + Intel `.app` zips, rebuilt on every push to `master`.
+**Play in browser:** → **[nmarchand73.github.io/StuntCarRacerForLovers/play](https://nmarchand73.github.io/StuntCarRacerForLovers/play/)**  
+
+**Mac download:** → **[Landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/)** (Apple Silicon + Intel `.app` zips)
 
 **From source:**
 
@@ -39,19 +40,26 @@ cmake -S . -B build && cmake --build build
 ./build/stuntcarracer
 ```
 
-**Browser:** → **[Play now](https://retro-foundry.github.io/multistuntcar/)**
+**Web (local):**
+
+```bash
+emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+cmake --build build-web
+# open build-web/stuntcarracer.html (needs a local server for .wasm)
+python3 -m http.server -d build-web 8080
+```
 
 ### GitHub Pages / CI
 
 Pushing to `master` runs [`.github/workflows/publish-macos.yml`](.github/workflows/publish-macos.yml):
 
-1. Builds Release on `macos-14` (arm64) and `macos-13` (x86_64)
-2. Packages `Stunt Car Racer for Lovers.app` + `data/` into zips
-3. Deploys the landing page + downloads to **GitHub Pages**
+1. Builds Release on `macos-14` (arm64) and `macos-13` (x86_64) → `.app` zips  
+2. Builds the **Emscripten web** game → `/play/`  
+3. Deploys the landing page + downloads + web build to **GitHub Pages**
 
 One-time repo setup: **Settings → Pages → Source: GitHub Actions**.
 
-Local package smoke test:
+Local Mac package smoke test:
 
 ```bash
 ./scripts/package-macos-app.sh build/stuntcarracer data /tmp/scr-dist arm64
