@@ -11,7 +11,7 @@ Source: https://github.com/nmarchand73/StuntCarRacerForLovers
 
 ## Download for Mac
 
-- [Apple Silicon DMG](https://nmarchand73.github.io/StuntCarRacerForLovers/download/StuntCarRacerForLovers-macOS-arm64.dmg): drag to Applications; first launch via right-click → Open (unsigned).
+- [Apple Silicon DMG](https://nmarchand73.github.io/StuntCarRacerForLovers/download/StuntCarRacerForLovers-macOS-arm64.dmg): drag to Applications; first launch via Fix macOS Gatekeeper.command or System Settings → Privacy & Security → Open Anyway (unsigned).
 
 ## What it is
 
@@ -22,7 +22,7 @@ Stunt Car Racer for Lovers is an open remake based on [StuntCarRemake](https://g
 - Amiga+ physics (toggle **U**)
 - Speed Feel FOV/blur (toggle **I**)
 - Enhanced Look rails, horizon, clouds, cube field (toggle **O**)
-- Two-player local + WebRTC guest/host
+- Single-player races with AI opponents
 - Track packs: Classic, TNT, Original, Loops
 
 ## FAQ

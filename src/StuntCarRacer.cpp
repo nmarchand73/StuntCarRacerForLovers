@@ -93,12 +93,19 @@ EMSCRIPTEN_KEEPALIVE void SetWebRTCGuestPlayer2Input(unsigned int input) {
 }
 /* Called from JS as a web-only keyboard bridge for browsers that do not pass cursor keys through SDL reliably. */
 EMSCRIPTEN_KEEPALIVE void SetWebKeyboardKey(unsigned int sdlKey, int pressed) {
+    const bool menuScreen = (GameMode == TRACK_MENU || GameMode == TRACK_PREVIEW);
+    const bool menuNavKey =
+        (sdlKey == SDLK_LEFT || sdlKey == SDLK_RIGHT || sdlKey == SDLK_UP || sdlKey == SDLK_DOWN ||
+         sdlKey == SDLK_RETURN);
     if (pressed) {
         keyPress = sdlKey;
-        if ((sdlKey != SDLK_LEFT && sdlKey != SDLK_RIGHT) || (GameMode != TRACK_MENU))
+        /* Arrow keys are menu navigation on track screens — do not treat as driving. */
+        if (!(menuScreen && menuNavKey))
             ApplyKeyboardInputForKey(sdlKey, true);
     } else {
-        if (keyPress == sdlKey)
+        /* Keep menu navigation latched until HandleTrackMenu / HandleTrackPreview consume it.
+           Clearing on keyup races the frame loop and drops short Left/Right taps on web. */
+        if (!(menuScreen && menuNavKey) && keyPress == sdlKey)
             keyPress = 0;
         ApplyKeyboardInputForKey(sdlKey, false);
     }
@@ -1499,8 +1506,8 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
                        (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
                        IsAmigaPhysicsUpgradeEnabled(), IsSpeedFeelEnabled(), GetTimeSeconds());
 
-    const bool goPrev = (keyPress == SDLK_LEFT);
-    const bool goNext = (keyPress == SDLK_RIGHT);
+    const bool goPrev = (keyPress == SDLK_LEFT || keyPress == SDLK_UP);
+    const bool goNext = (keyPress == SDLK_RIGHT || keyPress == SDLK_DOWN);
     if (goPrev || goNext || (keyPress == LEAGUEMENU)) {
         static long menuTrackSelection = 0;
         TrackPack previous_pack = GetTrackPack();
@@ -1575,6 +1582,8 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
         g_multiplayerPlayer1IsKeyboard = false;
         g_multiplayerPlayer1InstanceId = -1;
 #endif
+        bMultiplayerMode = FALSE;
+        bFauxMultiplayerMode = FALSE;
         bNewGame = TRUE; // Used here just to reset the opponent's car, which is then shown during the track preview
         ResetPlayer(); // Also reset player to clear values if there was a previous game (CarBehaviour normally does this, but isn't called for track preview)
         InvalidateOpponentInstances();
@@ -1594,54 +1603,36 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
 /*    ======================================================================================= */
 
 static void HandleTrackPreview(TextHelper& txtHelper) {
-    const bool selectSinglePlayer = (keyPress == SDLK_LEFT);
-    const bool selectMultiplayer = (keyPress == SDLK_RIGHT);
-    if (selectSinglePlayer || selectMultiplayer) {
-        bMultiplayerMode = selectMultiplayer;
-        // Left/Right explicitly selects single vs multiplayer; faux mode remains a hidden F8 toggle.
-        bFauxMultiplayerMode = false;
-#ifdef USE_SDL2
-        g_pendingMultiplayerStarterIsKeyboard = false;
-        g_pendingMultiplayerStarterInstanceId = -1;
-        g_multiplayerPlayer1IsKeyboard = false;
-        g_multiplayerPlayer1InstanceId = -1;
-#endif
-        keyPress = '\0';
-    }
+    /* Multiplayer mode toggle temporarily disabled — single-player only. */
+    bMultiplayerMode = FALSE;
+    bFauxMultiplayerMode = FALSE;
 
-    if (!bMultiplayerMode) {
-        if (keyPress == SDLK_UP) {
-            const long before = GetSinglePlayerOpponentCount();
-            SetSinglePlayerOpponentCount(before + 1);
-            if (GetSinglePlayerOpponentCount() != before) {
-                InvalidateOpponentInstances();
-                bNewGame = TRUE;
-            }
-            keyPress = '\0';
-        } else if (keyPress == SDLK_DOWN) {
-            const long before = GetSinglePlayerOpponentCount();
-            SetSinglePlayerOpponentCount(before - 1);
-            if (GetSinglePlayerOpponentCount() != before) {
-                InvalidateOpponentInstances();
-                bNewGame = TRUE;
-            }
-            keyPress = '\0';
+    if (keyPress == SDLK_UP) {
+        const long before = GetSinglePlayerOpponentCount();
+        SetSinglePlayerOpponentCount(before + 1);
+        if (GetSinglePlayerOpponentCount() != before) {
+            InvalidateOpponentInstances();
+            bNewGame = TRUE;
         }
+        keyPress = '\0';
+    } else if (keyPress == SDLK_DOWN) {
+        const long before = GetSinglePlayerOpponentCount();
+        SetSinglePlayerOpponentCount(before - 1);
+        if (GetSinglePlayerOpponentCount() != before) {
+            InvalidateOpponentInstances();
+            bNewGame = TRUE;
+        }
+        keyPress = '\0';
     }
 
     DrawTrackPreviewBrand(txtHelper, g_pFontDisplay, g_pFontScript, g_pSprite,
                           (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
-                          bMultiplayerMode != FALSE, GetSinglePlayerOpponentCount(), GetTimeSeconds());
+                          false, GetSinglePlayerOpponentCount(), GetTimeSeconds());
 
     if (keyPress == STARTMENU) {
 #ifdef USE_SDL2
-        if (bMultiplayerMode) {
-            g_multiplayerPlayer1IsKeyboard = g_pendingMultiplayerStarterIsKeyboard;
-            g_multiplayerPlayer1InstanceId = g_pendingMultiplayerStarterInstanceId;
-        } else {
-            g_multiplayerPlayer1IsKeyboard = false;
-            g_multiplayerPlayer1InstanceId = -1;
-        }
+        g_multiplayerPlayer1IsKeyboard = false;
+        g_multiplayerPlayer1InstanceId = -1;
         g_pendingMultiplayerStarterIsKeyboard = false;
         g_pendingMultiplayerStarterInstanceId = -1;
 #endif
@@ -2869,35 +2860,11 @@ bool process_events() {
                 break;
 
             case SDLK_F9:
-                // Track preview now uses Left/Right to pick single vs multiplayer.
-                if (GameMode != TRACK_PREVIEW) {
-                    bMultiplayerMode = !bMultiplayerMode;
-                    if (bMultiplayerMode) {
-                        bFauxMultiplayerMode = FALSE;
-                        opponentsID = NO_OPPONENT;
-                        InvalidateOpponentInstances();
-                    } else {
-#ifdef USE_SDL2
-                        g_pendingMultiplayerStarterIsKeyboard = false;
-                        g_pendingMultiplayerStarterInstanceId = -1;
-                        g_multiplayerPlayer1IsKeyboard = false;
-                        g_multiplayerPlayer1InstanceId = -1;
-#endif
-                    }
-                }
+                /* Multiplayer toggle temporarily disabled. */
                 break;
 
             case SDLK_F8:
-                bFauxMultiplayerMode = !bFauxMultiplayerMode;
-                if (bFauxMultiplayerMode) {
-                    bMultiplayerMode = FALSE;
-#ifdef USE_SDL2
-                    g_pendingMultiplayerStarterIsKeyboard = false;
-                    g_pendingMultiplayerStarterInstanceId = -1;
-                    g_multiplayerPlayer1IsKeyboard = false;
-                    g_multiplayerPlayer1InstanceId = -1;
-#endif
-                }
+                /* Faux multiplayer toggle temporarily disabled. */
                 break;
 
 #if defined(DEBUG) || defined(_DEBUG)
@@ -2934,12 +2901,12 @@ bool process_events() {
 
             // controls for Car Behaviour, Player 1 (Left/Right = track change when in track menu)
             case SDLK_LEFT:
-                if (GameMode != TRACK_MENU)
+                if (GameMode != TRACK_MENU && GameMode != TRACK_PREVIEW)
                     ApplyKeyboardInputForKey(keyPress, true);
                 break;
 
             case SDLK_RIGHT:
-                if (GameMode != TRACK_MENU)
+                if (GameMode != TRACK_MENU && GameMode != TRACK_PREVIEW)
                     ApplyKeyboardInputForKey(keyPress, true);
                 break;
 
@@ -2958,7 +2925,8 @@ bool process_events() {
 #else
             case SDLK_DOWN:
 #endif
-                ApplyKeyboardInputForKey(keyPress, true);
+                if (GameMode != TRACK_MENU && GameMode != TRACK_PREVIEW)
+                    ApplyKeyboardInputForKey(keyPress, true);
                 break;
 
 #if defined(PANDORA) || defined(PYRA)
@@ -2966,7 +2934,8 @@ bool process_events() {
 #else
             case SDLK_UP:
 #endif
-                ApplyKeyboardInputForKey(keyPress, true);
+                if (GameMode != TRACK_MENU && GameMode != TRACK_PREVIEW)
+                    ApplyKeyboardInputForKey(keyPress, true);
                 break;
 
             case SDLK_ESCAPE:
@@ -2983,7 +2952,17 @@ bool process_events() {
             }
             break;
         case SDL_KEYUP:
-            keyPress = 0;
+#ifdef __EMSCRIPTEN__
+            /* On web, menu Left/Right are latched via SetWebKeyboardKey; do not clear them here
+               or short taps vanish before HandleTrackMenu runs. */
+            if (!((GameMode == TRACK_MENU || GameMode == TRACK_PREVIEW) &&
+                  (event.key.keysym.sym == SDLK_LEFT || event.key.keysym.sym == SDLK_RIGHT ||
+                   event.key.keysym.sym == SDLK_UP || event.key.keysym.sym == SDLK_DOWN ||
+                   event.key.keysym.sym == SDLK_RETURN)))
+#endif
+            {
+                keyPress = 0;
+            }
             switch (event.key.keysym.sym) {
             // controls for Car Behaviour, Player 1
             case SDLK_LEFT:
@@ -3077,6 +3056,12 @@ bool process_events() {
                 } else if (((GameMode == TRACK_MENU) || (GameMode == TRACK_PREVIEW)) &&
                            (btn == SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) {
                     keyPress = SDLK_RIGHT;
+                } else if (((GameMode == TRACK_MENU) || (GameMode == TRACK_PREVIEW)) &&
+                           (btn == SDL_CONTROLLER_BUTTON_DPAD_UP)) {
+                    keyPress = SDLK_UP;
+                } else if (((GameMode == TRACK_MENU) || (GameMode == TRACK_PREVIEW)) &&
+                           (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN)) {
+                    keyPress = SDLK_DOWN;
                 }
             }
             break;

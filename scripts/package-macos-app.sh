@@ -94,25 +94,73 @@ ${ICON_XML}
 </plist>
 EOF
 
+# Ad-hoc sign so the bundle is a valid signed app after quarantine is cleared.
+# Full Gatekeeper pass still needs an Apple Developer ID + notarization ($99/yr).
+if command -v codesign >/dev/null; then
+  codesign --force --deep --sign - "${APP}"
+  echo "Ad-hoc codesigned ${APP}"
+fi
+
 cat > "${STAGE}/HOW-TO-OPEN.txt" <<'EOF'
 Stunt Car Racer for Lovers — macOS (Apple Silicon)
 
 1. Open this disk image.
 2. Drag "Stunt Car Racer for Lovers.app" into Applications.
-3. First launch: right-click the app → Open → Open
-   (required once — the build is not Apple-notarized).
+3. First launch (unsigned build — Apple shows a security warning):
+
+   Option A — easiest
+   Double-click "Fix macOS Gatekeeper.command" in this DMG.
+   macOS may ask to allow Terminal; confirm, then the game opens.
+
+   Option B — System Settings
+   After the warning, open System Settings → Privacy & Security.
+   Scroll down and click "Open Anyway", then confirm.
+
+   Option C — Finder
+   Right-click the app → Open → Open (once).
+
+   Option D — Terminal
+   xattr -cr "/Applications/Stunt Car Racer for Lovers.app"
+   open "/Applications/Stunt Car Racer for Lovers.app"
 
 Controls: U Amiga+ physics · I Speed feel · O Enhanced Look · P Pause
 
 Play in browser: https://nmarchand73.github.io/StuntCarRacerForLovers/play/
 EOF
 
-# DMG layout: app + Applications shortcut + readme
+# One-click Gatekeeper bypass for unsigned downloads (clears quarantine attribute).
+cat > "${STAGE}/Fix macOS Gatekeeper.command" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+APP_NAME="Stunt Car Racer for Lovers.app"
+CANDIDATES=(
+  "/Applications/${APP_NAME}"
+  "$(cd "$(dirname "$0")" && pwd)/${APP_NAME}"
+  "${HOME}/Applications/${APP_NAME}"
+)
+TARGET=""
+for candidate in "${CANDIDATES[@]}"; do
+  if [[ -d "${candidate}" ]]; then
+    TARGET="${candidate}"
+    break
+  fi
+done
+if [[ -z "${TARGET}" ]]; then
+  osascript -e 'display alert "App not found" message "Drag \"Stunt Car Racer for Lovers.app\" into Applications first, then run this again." as critical'
+  exit 1
+fi
+xattr -cr "${TARGET}"
+open "${TARGET}"
+EOF
+chmod +x "${STAGE}/Fix macOS Gatekeeper.command"
+
+# DMG layout: app + Applications shortcut + readme + Gatekeeper helper
 DMG_ROOT="${OUT_DIR}/dmgroot-${ARCH_LABEL}"
 rm -rf "${DMG_ROOT}"
 mkdir -p "${DMG_ROOT}"
 cp -R "${APP}" "${DMG_ROOT}/"
 cp "${STAGE}/HOW-TO-OPEN.txt" "${DMG_ROOT}/"
+cp "${STAGE}/Fix macOS Gatekeeper.command" "${DMG_ROOT}/"
 ln -s /Applications "${DMG_ROOT}/Applications"
 
 rm -f "${DMG_PATH}"

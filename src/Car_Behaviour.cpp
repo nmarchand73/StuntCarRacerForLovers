@@ -13,8 +13,7 @@
           Angles have the same magnitude but are unsigned.
           And sin/cos/tan also need alteration (divide by 2)
 
-
-/* OUTSTANDING ISSUES / IMPROVEMENTS :-
+    OUTSTANDING ISSUES / IMPROVEMENTS :-
 
     1.  SOME FUNCTIONS CONTAIN LOGIC THAT IS DEPENDANT UPON THE ORDER THAT THE
         TRACK PIECES ARE STORED IN (I.E. WHETHER THE PIECE NUMBERS INCREMENT
@@ -870,7 +869,7 @@ static void ProjectCarRenderPositionToRoadNormal(long* x, long* y, long* z) {
     VALUE2 = front_road_height;
     if (player_y > front_road_height)
     {
-    //*y = -(player_y * LOCAL_Y_FACTOR);
+    // *y = -(player_y * LOCAL_Y_FACTOR);
     VALUE3 = 0;
     }
     else

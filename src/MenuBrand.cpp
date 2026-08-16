@@ -295,7 +295,7 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
     DrawCenteredShadow(title, L"ENTER  -  RACE", 388, 0.98f, 0.78f, 0.35f, 0.55f + 0.45f * pulse, 1);
 
     bodyText.SetDisplaySize(12);
-    DrawCenteredShadow(bodyText, L"<  >  change track", 416, 0.72f, 0.68f, 0.70f, 0.9f, 1);
+    DrawCenteredShadow(bodyText, L"< >  or  ^ v  change track", 416, 0.72f, 0.68f, 0.70f, 0.9f, 1);
 
     bodyText.SetDisplaySize(11);
     {
@@ -357,32 +357,22 @@ void DrawTrackPreviewBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font
         DrawCenteredShadow(bodyText, ss.str(), 84, 0.78f, 0.70f, 0.72f, brandAlpha * 0.95f, 1);
     }
 
-    /* Setup rows */
+    /* Setup rows — single-player only (multiplayer toggle temporarily removed). */
     bodyText.SetDisplaySize(15);
     {
-        std::wstringstream ss;
-        ss << L"<  Mode   " << (multiplayer ? L"Multiplayer" : L"Single Player") << L"  >";
-        DrawCenteredShadow(bodyText, ss.str(), 268, 0.96f, 0.94f, 0.90f, setupAlpha, 1);
-    }
-
-    if (!multiplayer) {
         long n = opponentCount;
         if (n < 1)
             n = 1;
         if (n > 4)
             n = 4;
-        bodyText.SetDisplaySize(15);
-        {
-            std::wstringstream ss;
-            ss << L"^  Opponents   " << n << L"  v";
-            DrawCenteredShadow(bodyText, ss.str(), 292, 0.95f, 0.78f, 0.82f, setupAlpha, 1);
-        }
-        bodyText.SetDisplaySize(12);
-        DrawCenteredShadow(bodyText, L"Up / Down to change pack size", 314, 0.65f, 0.60f, 0.62f, setupAlpha * 0.9f, 1);
-    } else {
-        bodyText.SetDisplaySize(12);
-        DrawCenteredShadow(bodyText, L"Left / Right to change mode", 292, 0.65f, 0.60f, 0.62f, setupAlpha * 0.9f, 1);
+        std::wstringstream ss;
+        ss << L"^  Opponents   " << n << L"  v";
+        DrawCenteredShadow(bodyText, ss.str(), 268, 0.95f, 0.78f, 0.82f, setupAlpha, 1);
     }
+    bodyText.SetDisplaySize(12);
+    DrawCenteredShadow(bodyText, L"Up / Down to change pack size", 292, 0.65f, 0.60f, 0.62f, setupAlpha * 0.9f, 1);
+
+    (void)multiplayer;
 
     title.SetDisplaySize(24);
     DrawCenteredShadow(title, L"ENTER  -  RACE", 372, 0.98f, 0.78f, 0.35f, 0.55f + 0.45f * pulse, 1);

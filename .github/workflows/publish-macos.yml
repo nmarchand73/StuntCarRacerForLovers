@@ -121,6 +121,7 @@ jobs:
           cp site/index.html "${SITE_OUT}/"
           cp site/llms.txt site/robots.txt site/sitemap.xml "${SITE_OUT}/"
           touch "${SITE_OUT}/.nojekyll"
+          cp -R site/assets/. "${SITE_OUT}/assets/"
           cp data/Bitmap/icon.png "${SITE_OUT}/assets/icon.png"
           cp package/icon256.png "${SITE_OUT}/assets/icon256.png" 2>/dev/null || true
           cp artifacts/mac/*.dmg "${SITE_OUT}/download/"

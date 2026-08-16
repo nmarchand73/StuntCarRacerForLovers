@@ -7,7 +7,7 @@
 <p align="center">
   <strong>The classic jump. Shared.</strong><br>
   Geoff Crammond’s Amiga classic — remade for modern machines,<br>
-  with two-player races, Amiga+ physics, and an Enhanced Look<br>
+  with Amiga+ physics, and an Enhanced Look<br>
   that stays inside the original colour world.
 </p>
 
@@ -71,7 +71,7 @@ Local Mac DMG smoke test:
 
 | | |
 |:---|:---|
-| **Two-player** | Local splits + web guest/host over WebRTC |
+| **Two-player** | Temporarily disabled |
 | **Amiga+ physics** | Vesuri-tuned springs & damping closer to the Amiga |
 | **Speed feel** | FOV punch and rim blur that scale with pace |
 | **Enhanced Look** | Denser SCR world — still flat-shaded, never photoreal |
