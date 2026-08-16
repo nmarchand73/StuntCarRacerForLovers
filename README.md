@@ -189,7 +189,8 @@ python3 tools/generate_loops_tracks.py
 src/                 Game + platform
   AestheticsFeel.*   Enhanced Look toggle / fog
   TrackProps.*       Roadside props, cube field, living ambient
-site/                GitHub Pages landing (Mac download)
+site/                GitHub Pages landing + Mac downloads
+  (play/ from CI)    Published Emscripten web build
 scripts/             package-macos-app.sh
 .github/workflows/   publish-macos.yml (build + Pages)
 data/
