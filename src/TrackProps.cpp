@@ -32,18 +32,51 @@ static VertexBuffer* pLifeVB = NULL;
 static long numLifeVertices = 0;
 static float g_lifeStamp = -1.0f;
 
-static float g_carAnchorX = 0.0f;
-static float g_carAnchorY = 0.0f;
-static float g_carAnchorZ = 0.0f;
-static float g_carAnchorYaw = 0.0f;
-static bool g_carAnchorValid = false;
+enum { kMaxLifeCarTargets = 8, kChaseDroneCount = 2 };
 
-void SetTrackLifeCarAnchor(float worldX, float worldY, float worldZ, float yawRadians, bool valid) {
-    g_carAnchorX = worldX;
-    g_carAnchorY = worldY;
-    g_carAnchorZ = worldZ;
-    g_carAnchorYaw = yawRadians;
-    g_carAnchorValid = valid;
+struct LifeCarTarget {
+    float x, y, z;
+    float yaw;
+};
+
+struct ChaseDrone {
+    float x, y, z;
+    float yaw;
+    float rotor;
+    int targetIndex;
+    float sideSign;
+    float hoverBias;
+    float leadBias;
+    bool alive;
+};
+
+static LifeCarTarget g_carTargets[kMaxLifeCarTargets];
+static int g_carTargetCount = 0;
+static ChaseDrone g_drones[kChaseDroneCount];
+static bool g_dronesBooted = false;
+static float g_dronePrevTime = -1.0f;
+
+void ClearTrackLifeCarTargets(void) {
+    g_carTargetCount = 0;
+}
+
+void AddTrackLifeCarTarget(float worldX, float worldY, float worldZ, float yawRadians) {
+    if (g_carTargetCount >= kMaxLifeCarTargets)
+        return;
+    LifeCarTarget& t = g_carTargets[g_carTargetCount++];
+    t.x = worldX;
+    t.y = worldY;
+    t.z = worldZ;
+    t.yaw = yawRadians;
+}
+
+static void ResetChaseDrones(void) {
+    g_dronesBooted = false;
+    g_dronePrevTime = -1.0f;
+    for (int i = 0; i < kChaseDroneCount; ++i) {
+        g_drones[i].alive = false;
+        g_drones[i].targetIndex = -1;
+    }
 }
 
 static VertexBuffer* pAsphaltVB = NULL;
@@ -328,6 +361,8 @@ void FreeTrackLifeVertexBuffer(void) {
         pLifeVB->Release(), pLifeVB = NULL;
     numLifeVertices = 0;
     g_lifeStamp = -1.0f;
+    ResetChaseDrones();
+    ClearTrackLifeCarTargets();
 }
 
 void FreeTrackPropsVertexBuffer(void) {
@@ -700,6 +735,7 @@ void RebuildTrackProps(RenderDevice* pDevice) {
 void UpdateTrackLife(RenderDevice* pDevice, float timeSeconds) {
     if (pDevice == NULL || !IsAestheticsFeelEnabled() || TrackID == NO_TRACK || NumTrackPieces <= 0) {
         numLifeVertices = 0;
+        ResetChaseDrones();
         return;
     }
 
@@ -1117,48 +1153,155 @@ void UpdateTrackLife(RenderDevice* pDevice, float timeSeconds) {
         lifeTri(glm::vec3(x, y + r, z), glm::vec3(x - r, y, z), glm::vec3(x + r, y, z), col);
     }
 
-    /* Chase drones — follow the car, sometimes lead ahead (SCR brick camera bots). */
-    if (g_carAnchorValid) {
-        const DWORD hull = SCRGB(SCR_BASE_COLOUR + 14);    /* grey */
-        const DWORD accent = SCRGB(SCR_BASE_COLOUR + 6);   /* cyan (not brick +11) */
-        const DWORD tipOn = SCRGB(SCR_BASE_COLOUR + 15);   /* white */
-        const DWORD tipHot = SCRGB(SCR_BASE_COLOUR + 3);   /* yellow */
-        const float fwdX = std::sin(g_carAnchorYaw);
-        const float fwdZ = std::cos(g_carAnchorYaw);
-        const float rightX = fwdZ;
-        const float rightZ = -fwdX;
+    /* Chase drones — max 2 per track; sticky-assign to player / rivals. */
+    {
+        float dt = 1.0f / 60.0f;
+        if (g_dronePrevTime >= 0.0f) {
+            dt = t - g_dronePrevTime;
+            if (dt < 0.0f || dt > 0.25f)
+                dt = 1.0f / 60.0f;
+        }
+        g_dronePrevTime = t;
 
-        for (int d = 0; d < 4; ++d) {
-            const float seed = (float)d * 1.7f + 0.4f;
-            /* Lead factor: slow wander from behind (−1) to ahead (+1). */
-            const float leadWave = std::sin(t * (0.18f + 0.04f * (float)d) + seed);
-            const float lead = 90.0f + 210.0f * leadWave; /* often ahead when positive */
-            const float side = (d < 2 ? -1.0f : 1.0f) * (70.0f + 40.0f * (float)(d % 2)) +
-                               35.0f * std::sin(t * 0.55f + seed * 2.0f);
-            const float hover = 95.0f + 28.0f * (float)(d % 3) + 18.0f * std::sin(t * 1.4f + seed);
+        const int targetCount = g_carTargetCount;
+        const int activeDrones = (targetCount <= 0) ? 0 : kChaseDroneCount;
 
-            const float dx = g_carAnchorX + fwdX * lead + rightX * side;
-            const float dy = g_carAnchorY + hover;
-            const float dz = g_carAnchorZ + fwdZ * lead + rightZ * side;
+        if (activeDrones == 0) {
+            for (int d = 0; d < kChaseDroneCount; ++d)
+                g_drones[d].alive = false;
+            g_dronesBooted = false;
+        } else {
+            if (!g_dronesBooted) {
+                for (int d = 0; d < kChaseDroneCount; ++d) {
+                    ChaseDrone& dr = g_drones[d];
+                    const int ti = (targetCount >= 2) ? (d % targetCount) : 0;
+                    const LifeCarTarget& car = g_carTargets[ti];
+                    const float fwdX = std::sin(car.yaw);
+                    const float fwdZ = std::cos(car.yaw);
+                    const float rightX = fwdZ;
+                    const float rightZ = -fwdX;
+                    dr.sideSign = (d == 0) ? -1.0f : 1.0f;
+                    dr.hoverBias = 88.0f + 22.0f * (float)d;
+                    dr.leadBias = 40.0f + 55.0f * (float)d;
+                    dr.targetIndex = ti;
+                    dr.x = car.x + rightX * (dr.sideSign * 95.0f) - fwdX * 40.0f;
+                    dr.y = car.y + dr.hoverBias;
+                    dr.z = car.z + rightZ * (dr.sideSign * 95.0f) - fwdZ * 40.0f;
+                    dr.yaw = car.yaw;
+                    dr.rotor = (float)d * 1.7f;
+                    dr.alive = true;
+                }
+                g_dronesBooted = true;
+            }
 
-            /* Body diamond + thin wing bars. */
-            const float bs = 14.0f;
-            lifeTri(glm::vec3(dx, dy + bs, dz), glm::vec3(dx - bs, dy, dz), glm::vec3(dx + bs, dy, dz), hull);
-            lifeTri(glm::vec3(dx, dy - bs * 0.4f, dz), glm::vec3(dx - bs * 0.7f, dy, dz),
-                    glm::vec3(dx + bs * 0.7f, dy, dz), accent);
-            /* Rotor disc (flat, spinning silhouette). */
-            const float spin = t * (9.0f + (float)d * 1.3f) + seed;
-            const float rr = 22.0f;
-            const float rx = std::cos(spin) * rr;
-            const float rz = std::sin(spin) * rr;
-            lifeTri(glm::vec3(dx, dy + 6.0f, dz), glm::vec3(dx + rx, dy + 6.0f, dz + rz),
-                    glm::vec3(dx - rz * 0.6f, dy + 6.0f, dz + rx * 0.6f), tipOn);
-            /* Nose blink when leading. */
-            if (leadWave > 0.15f) {
-                const float tip = 8.0f + 4.0f * std::sin(t * 12.0f + seed);
-                lifeTri(glm::vec3(dx + fwdX * 18.0f, dy + tip, dz + fwdZ * 18.0f),
-                        glm::vec3(dx + fwdX * 10.0f - rightX * tip, dy, dz + fwdZ * 10.0f - rightZ * tip),
-                        glm::vec3(dx + fwdX * 10.0f + rightX * tip, dy, dz + fwdZ * 10.0f + rightZ * tip), tipHot);
+            const DWORD hull = SCRGB(SCR_BASE_COLOUR + 14);  /* grey */
+            const DWORD arm = SCRGB(SCR_BASE_COLOUR + 0);     /* dark */
+            const DWORD accent = SCRGB(SCR_BASE_COLOUR + 6);  /* cyan */
+            const DWORD tipOn = SCRGB(SCR_BASE_COLOUR + 15);  /* white */
+            const DWORD tipHot = SCRGB(SCR_BASE_COLOUR + 3);  /* yellow */
+            const DWORD lens = SCRGB(SCR_BASE_COLOUR + 9);    /* red LED */
+
+            for (int d = 0; d < kChaseDroneCount; ++d) {
+                ChaseDrone& dr = g_drones[d];
+                /* Sticky target: prefer distinct cars when 2+ exist. */
+                int ti = dr.targetIndex;
+                if (ti < 0 || ti >= targetCount)
+                    ti = (targetCount >= 2) ? (d % targetCount) : 0;
+                if (targetCount >= 2) {
+                    const int preferred = d % targetCount;
+                    if (ti == g_drones[1 - d].targetIndex && preferred != ti)
+                        ti = preferred;
+                }
+                dr.targetIndex = ti;
+                const LifeCarTarget& car = g_carTargets[ti];
+
+                const float fwdX = std::sin(car.yaw);
+                const float fwdZ = std::cos(car.yaw);
+                const float rightX = fwdZ;
+                const float rightZ = -fwdX;
+                const float seed = (float)d * 2.1f + 0.35f;
+                const float leadWave = std::sin(t * (0.22f + 0.05f * (float)d) + seed);
+                const float lead = dr.leadBias + 160.0f * leadWave;
+                const float side =
+                    dr.sideSign * (85.0f + 28.0f * (float)d) + 22.0f * std::sin(t * 0.7f + seed * 1.8f);
+                const float hover = dr.hoverBias + 14.0f * std::sin(t * 1.55f + seed);
+
+                const float wantX = car.x + fwdX * lead + rightX * side;
+                const float wantY = car.y + hover;
+                const float wantZ = car.z + fwdZ * lead + rightZ * side;
+
+                const float follow = 1.0f - std::exp(-4.2f * dt);
+                const float turnFollow = 1.0f - std::exp(-5.5f * dt);
+                dr.x += (wantX - dr.x) * follow;
+                dr.y += (wantY - dr.y) * follow;
+                dr.z += (wantZ - dr.z) * follow;
+
+                float toCarX = car.x - dr.x;
+                float toCarZ = car.z - dr.z;
+                const float toLen = std::sqrt(toCarX * toCarX + toCarZ * toCarZ);
+                float faceYaw = car.yaw;
+                if (toLen > 8.0f)
+                    faceYaw = std::atan2(toCarX, toCarZ);
+                float dyaw = faceYaw - dr.yaw;
+                while (dyaw > 3.14159265f)
+                    dyaw -= 6.2831853f;
+                while (dyaw < -3.14159265f)
+                    dyaw += 6.2831853f;
+                dr.yaw += dyaw * turnFollow;
+                dr.rotor += dt * (14.0f + 2.5f * (float)d);
+                dr.alive = true;
+
+                const float dx = dr.x;
+                const float dy = dr.y;
+                const float dz = dr.z;
+                const float fX = std::sin(dr.yaw);
+                const float fZ = std::cos(dr.yaw);
+                const float rX = fZ;
+                const float rZ = -fX;
+
+                /* Oriented SCR camera-drone: body, arms, rotors, lens toward car. */
+                const float halfL = 16.0f;
+                const float halfW = 10.0f;
+                const glm::vec3 nose(dx + fX * halfL, dy, dz + fZ * halfL);
+                const glm::vec3 tail(dx - fX * halfL * 0.85f, dy + 2.0f, dz - fZ * halfL * 0.85f);
+                const glm::vec3 left(dx - rX * halfW, dy + 1.0f, dz - rZ * halfW);
+                const glm::vec3 right(dx + rX * halfW, dy + 1.0f, dz + rZ * halfW);
+                lifeTri(nose, left, right, hull);
+                lifeTri(tail, right, left, accent);
+
+                const float armLen = 26.0f;
+                const float armY = dy + 5.0f;
+                for (int a = 0; a < 4; ++a) {
+                    const float sx = ((a & 1) ? 1.0f : -1.0f);
+                    const float sz = ((a & 2) ? 1.0f : -1.0f);
+                    const float ax = dx + (fX * sx + rX * sz) * armLen * 0.55f;
+                    const float az = dz + (fZ * sx + rZ * sz) * armLen * 0.55f;
+                    lifeTri(glm::vec3(dx, armY, dz), glm::vec3(ax - rX * 2.0f, armY, az - rZ * 2.0f),
+                            glm::vec3(ax + rX * 2.0f, armY, az + rZ * 2.0f), arm);
+
+                    const float spin = dr.rotor + (float)a * 1.5707963f;
+                    const float rr = 18.0f;
+                    const float bx = std::cos(spin) * rr;
+                    const float bz = std::sin(spin) * rr;
+                    /* Rotor blade in world XZ, centered on arm tip. */
+                    lifeTri(glm::vec3(ax, armY + 3.0f, az), glm::vec3(ax + bx, armY + 3.0f, az + bz),
+                            glm::vec3(ax - bz * 0.35f, armY + 3.0f, az + bx * 0.35f), tipOn);
+                    lifeTri(glm::vec3(ax, armY + 3.0f, az), glm::vec3(ax - bx, armY + 3.0f, az - bz),
+                            glm::vec3(ax + bz * 0.35f, armY + 3.0f, az - bx * 0.35f), tipHot);
+                }
+
+                /* Camera gondola + LED facing the tracked car. */
+                const float camX = dx + fX * 6.0f;
+                const float camY = dy - 10.0f;
+                const float camZ = dz + fZ * 6.0f;
+                lifeTri(glm::vec3(camX, camY + 5.0f, camZ), glm::vec3(camX - rX * 5.0f, camY, camZ - rZ * 5.0f),
+                        glm::vec3(camX + rX * 5.0f, camY, camZ + rZ * 5.0f), arm);
+                const float blink = 0.5f + 0.5f * std::sin(t * 10.0f + seed);
+                const DWORD led = (blink > 0.35f) ? lens : tipHot;
+                const float tip = 4.5f + 2.0f * blink;
+                lifeTri(glm::vec3(camX + fX * 8.0f, camY + tip * 0.2f, camZ + fZ * 8.0f),
+                        glm::vec3(camX - rX * tip, camY, camZ - rZ * tip),
+                        glm::vec3(camX + rX * tip, camY, camZ + rZ * tip), led);
             }
         }
     }

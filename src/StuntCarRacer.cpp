@@ -2199,14 +2199,20 @@ static void RenderWorldGeometry(RenderDevice* pDevice, bool drawPlayer1Car, bool
     DrawAsphaltRoad(pDevice);
     DrawTrack(pDevice);
     {
+        ClearTrackLifeCarTargets();
         const bool raceOrPreview = (GameMode == GAME_IN_PROGRESS || GameMode == TRACK_PREVIEW);
         if (raceOrPreview && IsAestheticsFeelEnabled()) {
-            const float wx = FixedPointToWorldCoord(player1_render_x);
-            const float wy = -FixedPointToWorldCoord(player1_render_y) + GetPlayerCarRenderYOffset();
-            const float wz = FixedPointToWorldCoord(player1_render_z);
-            SetTrackLifeCarAnchor(wx, wy, wz, PlayerAngleToRadians(player1_y_angle), true);
-        } else {
-            SetTrackLifeCarAnchor(0.0f, 0.0f, 0.0f, 0.0f, false);
+            AddTrackLifeCarTarget(FixedPointToWorldCoord(player1_render_x),
+                                  -FixedPointToWorldCoord(player1_render_y) + GetPlayerCarRenderYOffset(),
+                                  FixedPointToWorldCoord(player1_render_z),
+                                  PlayerAngleToRadians(player1_y_angle));
+            const long oppCount = ActiveSpOpponentDrawCount();
+            const float oppYOff = GetOpponentCarRenderYOffset();
+            for (long i = 0; i < oppCount; ++i) {
+                AddTrackLifeCarTarget(FixedPointToWorldCoord(sp_opp_render_x[i]),
+                                      -FixedPointToWorldCoord(sp_opp_render_y[i]) + oppYOff,
+                                      FixedPointToWorldCoord(sp_opp_render_z[i]), sp_opp_y_angle[i]);
+            }
         }
     }
     UpdateTrackLife(pDevice, static_cast<float>(GetTimeSeconds()));
