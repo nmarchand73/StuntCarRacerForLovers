@@ -87,25 +87,6 @@ static unsigned PropHash(long piece, long s, long salt) {
     return (unsigned)(piece * 73856093u) ^ (unsigned)(s * 19349663u) ^ (unsigned)(salt * 83492791u);
 }
 
-static bool PieceIsBumpyStretch(long piece) {
-    const long m = piece % 7;
-    return (m == 2 || m == 3 || m == 5);
-}
-
-static DWORD RailColourFor(long piece, long s, bool left, DWORD yellow, DWORD red, DWORD white, DWORD grey) {
-    const unsigned h = PropHash(piece, s, left ? 11 : 29);
-    switch (h % 4) {
-    case 0:
-        return yellow;
-    case 1:
-        return red;
-    case 2:
-        return white;
-    default:
-        return grey;
-    }
-}
-
 static void EmitTri(UTVERTEX* verts, long* count, long maxVerts, const glm::vec3& a, const glm::vec3& b,
                     const glm::vec3& c, DWORD colour) {
     if (verts == NULL || count == NULL || (*count) + 3 > maxVerts)
@@ -494,7 +475,10 @@ void RebuildTrackProps(RenderDevice* pDevice) {
             return side;
         };
 
-        /* Per-segment irregular rails — gaps, height/outset jitter, SCR colour hash. */
+        /* Continuous high side barriers — fixed height/outset, SCR yellow/red stripes. */
+        const float kRailH = 36.0f;
+        const float kRailOut = 12.0f;
+        const float kRailTop = 3.0f;
         for (long s = 0; s < segs - 1; ++s) {
             const long offset = s * 4;
             glm::vec3 l0 = PieceWorldVertex(piece, offset);
@@ -503,43 +487,27 @@ void RebuildTrackProps(RenderDevice* pDevice) {
             glm::vec3 r1 = PieceWorldVertex(piece, offset + 5);
 
             auto emitSegRail = [&](glm::vec3 a, glm::vec3 b, bool left) {
-                const unsigned h = PropHash(piece, s, left ? 3 : 7);
-                /* ~8% gaps — keep the barrier dense. */
-                if ((h % 25) < 2)
-                    return;
-
                 glm::vec3 side = sideOut(a, b, left);
                 if (glm::length(side) < 0.1f)
                     return;
 
-                float railH = 12.0f + static_cast<float>(h % 25); /* 12..36 */
-                float out = 10.0f + static_cast<float>((h >> 2) % 11); /* 10..20 */
-                if (PieceIsBumpyStretch(piece)) {
-                    railH += 4.0f + static_cast<float>(h % 8);
-                    out += 2.0f;
-                }
-                const float hA = railH + static_cast<float>((int)(h % 9) - 4);
-                const float hB = railH + static_cast<float>((int)((h >> 4) % 9) - 4);
-
-                glm::vec3 a0 = a + side * out;
-                glm::vec3 b0 = b + side * (out + static_cast<float>((int)(h % 5) - 2) * 0.5f);
-                glm::vec3 a1 = a0 + glm::vec3(0, hA, 0);
-                glm::vec3 b1 = b0 + glm::vec3(0, hB, 0);
-                const DWORD railCol =
-                    RailColourFor(piece, s, left, barrierYellow, barrierRed, flagWhite, postGrey);
+                glm::vec3 a0 = a + side * kRailOut;
+                glm::vec3 b0 = b + side * kRailOut;
+                glm::vec3 a1 = a0 + glm::vec3(0, kRailH, 0);
+                glm::vec3 b1 = b0 + glm::vec3(0, kRailH, 0);
+                /* Two-segment stripe blocks so joins stay colour-matched. */
+                const DWORD railCol = (((piece * 64 + s) / 2) % 2) ? barrierYellow : barrierRed;
                 EmitQuad(pVertices, &numPropVertices, MAX_PROP_VERTICES, a0, b0, b1, a1, railCol);
+                /* Slim top cap for a clean continuous crown. */
+                EmitQuad(pVertices, &numPropVertices, MAX_PROP_VERTICES, a1, b1, b1 + glm::vec3(0, kRailTop, 0),
+                         a1 + glm::vec3(0, kRailTop, 0), postGrey);
 
-                /* Dense short marker posts (not tall poles). */
-                if ((h % 4) == 0) {
-                    const float postH = 22.0f + static_cast<float>(h % 16);
-                    glm::vec3 p = (a0 + b0) * 0.5f;
-                    glm::vec3 p2 = p + side * 4.0f;
-                    EmitQuad(pVertices, &numPropVertices, MAX_PROP_VERTICES, p, p2, p2 + glm::vec3(0, postH, 0),
-                             p + glm::vec3(0, postH, 0), postGrey);
-                    glm::vec3 tip = p + glm::vec3(0, postH, 0);
-                    EmitQuad(pVertices, &numPropVertices, MAX_PROP_VERTICES, tip, tip + side * 6.0f,
-                             tip + side * 6.0f + glm::vec3(0, 8.0f, 0), tip + glm::vec3(0, 8.0f, 0),
-                             (h & 1) ? barrierRed : barrierYellow);
+                /* Regular posts every 4 segments — same height as the barrier. */
+                if ((s % 4) == 0) {
+                    glm::vec3 p = a0;
+                    glm::vec3 p2 = p + side * 5.0f;
+                    EmitQuad(pVertices, &numPropVertices, MAX_PROP_VERTICES, p, p2, p2 + glm::vec3(0, kRailH, 0),
+                             p + glm::vec3(0, kRailH, 0), postGrey);
                 }
             };
 
