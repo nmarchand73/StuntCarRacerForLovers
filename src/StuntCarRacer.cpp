@@ -146,6 +146,16 @@ bool IsWebRTCGuestConnected(void) {
 }
 
 int wideScreen = 0;
+static float g_requestedScreenScale = 0.0f;
+#ifdef USE_SDL2
+/* Letterboxed 16:9 game rect inside the drawable (black bars when display is taller). */
+static int g_layoutFbW = 0;
+static int g_layoutFbH = 0;
+static int g_layoutVpX = 0;
+static int g_layoutVpY = 0;
+static int g_layoutVpW = 0;
+static int g_layoutVpH = 0;
+#endif
 
 static bool bFrameMoved = FALSE;
 static double g_logicAccumulator = 0.0;
@@ -169,7 +179,6 @@ static int g_accelSampleCount = 0;
 static int g_brakeSampleCount = 0;
 static int g_boostSampleCount = 0;
 static bool g_restartEngineAudioOnFirstInput = false;
-static float g_requestedScreenScale = 0.0f;
 
 #ifdef USE_SDL2
 #define MAX_LOCAL_PLAYERS 8
@@ -3105,8 +3114,18 @@ bool process_events() {
 #endif
 #ifdef USE_SDL2
         case SDL_WINDOWEVENT:
-            if ((event.window.event == SDL_WINDOWEVENT_RESIZED) || (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED))
-                ApplyWindowLayout(event.window.data1, event.window.data2, false);
+            if ((event.window.event == SDL_WINDOWEVENT_RESIZED) || (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)) {
+                int fbW = event.window.data1, fbH = event.window.data2;
+                if (window != NULL) {
+                    int dw = 0, dh = 0;
+                    SDL_GL_GetDrawableSize(window, &dw, &dh);
+                    if (dw > 0 && dh > 0) {
+                        fbW = dw;
+                        fbH = dh;
+                    }
+                }
+                ApplyWindowLayout(fbW, fbH, false);
+            }
             break;
 #endif
         }
@@ -3121,33 +3140,84 @@ SDL_Window* window = NULL;
 #endif
 
 static void ApplyWindowLayout(int windowWidth, int windowHeight, bool logLayout) {
-    if ((windowWidth <= 0) || (windowHeight <= 0))
+    int fbW = windowWidth;
+    int fbH = windowHeight;
+#ifdef USE_SDL2
+    /* Prefer GL drawable size so Retina / HiDPI stays pixel-correct. */
+    if (window != NULL) {
+        int dw = 0, dh = 0;
+        SDL_GL_GetDrawableSize(window, &dw, &dh);
+        if (dw > 0 && dh > 0) {
+            fbW = dw;
+            fbH = dh;
+        }
+    }
+#endif
+    if ((fbW <= 0) || (fbH <= 0))
         return;
 
     float screenScale = g_requestedScreenScale;
     if (screenScale <= 0.0f) {
-        float scaleX = static_cast<float>(windowWidth) / 640.0f;
-        float scaleY = static_cast<float>(windowHeight) / 480.0f;
+        float scaleX = static_cast<float>(fbW) / 640.0f;
+        float scaleY = static_cast<float>(fbH) / 480.0f;
         screenScale = (scaleX < scaleY) ? scaleX : scaleY;
     }
     if (screenScale <= 0.0f)
         screenScale = 1.0f;
 
-    wideScreen = (((static_cast<float>(windowWidth) / screenScale) - 640.0f) >= 80.0f) ? 1 : 0;
+    /*
+     * Lock the game to 16:9. Mac fullscreen is often ~16:10, which is narrower and
+     * eats the left/right world view — letterbox with black bars instead.
+     */
+    const float targetAspect = 16.0f / 9.0f;
+    const float fbAspect = static_cast<float>(fbW) / static_cast<float>(fbH);
+    int viewportW, viewportH, viewportX, viewportY;
+    if (fbAspect + 0.001f < targetAspect) {
+        /* Display taller than 16:9 → black bars top/bottom. */
+        viewportW = fbW;
+        viewportH = static_cast<int>(static_cast<float>(fbW) / targetAspect + 0.5f);
+        if (viewportH < 1)
+            viewportH = 1;
+        if (viewportH > fbH)
+            viewportH = fbH;
+        viewportX = 0;
+        viewportY = (fbH - viewportH) / 2;
+    } else if (fbAspect - 0.001f > targetAspect) {
+        /* Display wider than 16:9 → pillarbox left/right. */
+        viewportH = fbH;
+        viewportW = static_cast<int>(static_cast<float>(fbH) * targetAspect + 0.5f);
+        if (viewportW < 1)
+            viewportW = 1;
+        if (viewportW > fbW)
+            viewportW = fbW;
+        viewportX = (fbW - viewportW) / 2;
+        viewportY = 0;
+    } else {
+        viewportW = fbW;
+        viewportH = fbH;
+        viewportX = 0;
+        viewportY = 0;
+    }
 
-    /* Use the whole rendering area instead of letterboxing */
-    int viewportW = windowWidth;
-    int viewportH = windowHeight;
-    int viewportX = 0;
-    int viewportY = 0;
+    wideScreen = 1;
+
+#ifdef USE_SDL2
+    g_layoutFbW = fbW;
+    g_layoutFbH = fbH;
+    g_layoutVpX = viewportX;
+    g_layoutVpY = viewportY;
+    g_layoutVpW = viewportW;
+    g_layoutVpH = viewportH;
+#endif
 
     glViewport(viewportX, viewportY, viewportW, viewportH);
 
     SetPerspectiveDepthRange(&pDevice, PERSPECTIVE_NEAR, PERSPECTIVE_FAR);
 
     if (logLayout) {
-        printf("Display mode: %s, Scale: %.2f, Viewport: %dx%d @ (%d,%d)\n", wideScreen ? "Widescreen" : "Standard",
-               screenScale, viewportW, viewportH, viewportX, viewportY);
+        const bool barred = (viewportW != fbW || viewportH != fbH);
+        printf("Display mode: 16:9%s, Scale: %.2f, Viewport: %dx%d @ (%d,%d) in %dx%d\n",
+               barred ? " (letterbox)" : " (fill)", screenScale, viewportW, viewportH, viewportX, viewportY, fbW, fbH);
     }
 }
 
@@ -3162,15 +3232,60 @@ static void ToggleDesktopFullscreen(void) {
         return;
     }
     int w = 0, h = 0;
-    SDL_GetWindowSize(window, &w, &h);
-    ApplyWindowLayout(w, h, false);
+    SDL_GL_GetDrawableSize(window, &w, &h);
+    if (w <= 0 || h <= 0)
+        SDL_GetWindowSize(window, &w, &h);
+    ApplyWindowLayout(w, h, true);
 }
 #endif
 
 static void RenderCurrentFrame(double frameTime, float frameDelta) {
+#ifdef USE_SDL2
+    const bool letterboxed = (g_layoutFbW > 0 && g_layoutFbH > 0 &&
+                              (g_layoutVpX != 0 || g_layoutVpY != 0 || g_layoutVpW != g_layoutFbW ||
+                               g_layoutVpH != g_layoutFbH));
+    if (letterboxed) {
+        /* Full-framebuffer black, then clip all game clears/draws to the 16:9 rect. */
+        glDisable(GL_SCISSOR_TEST);
+        glViewport(0, 0, g_layoutFbW, g_layoutFbH);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glViewport(g_layoutVpX, g_layoutVpY, g_layoutVpW, g_layoutVpH);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(g_layoutVpX, g_layoutVpY, g_layoutVpW, g_layoutVpH);
+    } else {
+        glDisable(GL_SCISSOR_TEST);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
+#else
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+#endif
     OnFrameRender(&pDevice, frameTime, frameDelta, NULL);
 #ifdef USE_SDL2
+    if (letterboxed) {
+        /* Re-stamp black bars in case anything drew outside / reset clear color to sky. */
+        glDisable(GL_SCISSOR_TEST);
+        glViewport(0, 0, g_layoutFbW, g_layoutFbH);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        if (g_layoutVpY > 0) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(0, 0, g_layoutFbW, g_layoutVpY);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glScissor(0, g_layoutVpY + g_layoutVpH, g_layoutFbW,
+                      g_layoutFbH - (g_layoutVpY + g_layoutVpH));
+            glClear(GL_COLOR_BUFFER_BIT);
+            glDisable(GL_SCISSOR_TEST);
+        }
+        if (g_layoutVpX > 0) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(0, 0, g_layoutVpX, g_layoutFbH);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glScissor(g_layoutVpX + g_layoutVpW, 0, g_layoutFbW - (g_layoutVpX + g_layoutVpW), g_layoutFbH);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glDisable(GL_SCISSOR_TEST);
+        }
+        glViewport(g_layoutVpX, g_layoutVpY, g_layoutVpW, g_layoutVpH);
+    }
     SDL_GL_SwapWindow(window);
 #else
     SDL_GL_SwapBuffers();
