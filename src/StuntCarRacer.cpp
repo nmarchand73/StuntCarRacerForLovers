@@ -19,6 +19,8 @@
 #include "Car_Behaviour.h"
 #include "Opponent_Behaviour.h"
 #include "PhysicsConfig.h"
+#include "MenuBrand.h"
+#include "SpeedFeel.h"
 #include "wavefunctions.h"
 #include "Atlas.h"
 #include "version.h"
@@ -193,6 +195,8 @@ double gameStartTime, gameEndTime;
 bool bSuperLeague = FALSE;
 /* Split-screen orientation: true = horizontal (top/bottom), false = vertical (left/right). */
 static bool g_splitScreenHorizontal = true;
+static double g_physicsHudFlashUntil = 0.0;
+static double g_speedFeelHudFlashUntil = 0.0;
 
 static bool IsSplitScreenMode(void) {
     return bMultiplayerMode || bFauxMultiplayerMode;
@@ -252,11 +256,39 @@ static long player1_x = 0, player1_y = 0, player1_z = 0;
 static long player1_x_angle = (0 << 6), player1_y_angle = (0 << 6), player1_z_angle = (0 << 6);
 static long player1_render_x = 0, player1_render_y = 0, player1_render_z = 0;
 
-// Opponent orientation
+// Opponent orientation (slot 0 / multiplayer P2)
 static long opponent_x = 0, opponent_y = 0, opponent_z = 0;
 
 static float opponent_x_angle = 0.0f, opponent_y_angle = 0.0f, opponent_z_angle = 0.0f;
 static long opponent_render_x = 0, opponent_render_y = 0, opponent_render_z = 0;
+
+/* Extra single-player AI pack poses (index 0 mirrors opponent_*). */
+static long sp_opp_x[MAX_SP_OPPONENTS] = {};
+static long sp_opp_y[MAX_SP_OPPONENTS] = {};
+static long sp_opp_z[MAX_SP_OPPONENTS] = {};
+static float sp_opp_x_angle[MAX_SP_OPPONENTS] = {};
+static float sp_opp_y_angle[MAX_SP_OPPONENTS] = {};
+static float sp_opp_z_angle[MAX_SP_OPPONENTS] = {};
+static long sp_opp_render_x[MAX_SP_OPPONENTS] = {};
+static long sp_opp_render_y[MAX_SP_OPPONENTS] = {};
+static long sp_opp_render_z[MAX_SP_OPPONENTS] = {};
+static long prev_sp_opp_x[MAX_SP_OPPONENTS] = {};
+static long prev_sp_opp_y[MAX_SP_OPPONENTS] = {};
+static long prev_sp_opp_z[MAX_SP_OPPONENTS] = {};
+static float prev_sp_opp_x_angle[MAX_SP_OPPONENTS] = {};
+static float prev_sp_opp_y_angle[MAX_SP_OPPONENTS] = {};
+static float prev_sp_opp_z_angle[MAX_SP_OPPONENTS] = {};
+static long prev_sp_opp_render_x[MAX_SP_OPPONENTS] = {};
+static long prev_sp_opp_render_y[MAX_SP_OPPONENTS] = {};
+static long prev_sp_opp_render_z[MAX_SP_OPPONENTS] = {};
+static glm::mat4 matWorldSpOpponents[MAX_SP_OPPONENTS];
+
+static long ActiveSpOpponentDrawCount(void) {
+    if (bMultiplayerMode)
+        return 1;
+    return GetSinglePlayerOpponentCount();
+}
+
 
 // Previous logic-tick state for render interpolation
 static long prev_player1_x = 0, prev_player1_y = 0, prev_player1_z = 0;
@@ -648,6 +680,8 @@ void SetTextureColour(long colour_index) { Fill_Colour = SCRGB(colour_index); }
 //--------------------------------------------------------------------------------------
 TTF_Font* g_pFont = NULL;
 TTF_Font* g_pFontLarge = NULL;
+TTF_Font* g_pFontDisplay = NULL;
+TTF_Font* g_pFontScript = NULL;
 float GetTextScale() {
     const SurfaceDesc* desc = GetBackBufferSurfaceDesc();
     if (!desc || desc->Height <= 0)
@@ -669,11 +703,25 @@ void CreateFonts() {
     if (g_pFontLarge == NULL) {
         g_pFontLarge = TTF_OpenFont("data/DejaVuSans-Bold.ttf", 60);
     }
-    if (g_pFont == NULL || g_pFontLarge == NULL) {
-        printf("Could not load font data/DejaVuSans-Bold.ttf: %s\n", TTF_GetError());
+    if (g_pFontDisplay == NULL) {
+        g_pFontDisplay = TTF_OpenFont("data/Oswald-Bold.ttf", 72);
+        if (g_pFontDisplay == NULL) {
+            printf("Menu display font Oswald missing (%s) — falling back to DejaVu\n", TTF_GetError());
+            g_pFontDisplay = TTF_OpenFont("data/DejaVuSans-Bold.ttf", 72);
+        }
+    }
+    if (g_pFontScript == NULL) {
+        g_pFontScript = TTF_OpenFont("data/GreatVibes-Regular.ttf", 72);
+        if (g_pFontScript == NULL) {
+            printf("Menu script font Great Vibes missing (%s) — falling back to display\n", TTF_GetError());
+            g_pFontScript = g_pFontDisplay;
+        }
+    }
+    if (g_pFont == NULL || g_pFontLarge == NULL || g_pFontDisplay == NULL || g_pFontScript == NULL) {
+        printf("Could not load fonts: %s\n", TTF_GetError());
         exit(1);
     }
-    printf("Font created (%p / %p)\n", g_pFont, g_pFontLarge);
+    printf("Font created (%p / %p / %p / %p)\n", g_pFont, g_pFontLarge, g_pFontDisplay, g_pFontScript);
 }
 void CloseFonts() {
     if (g_pFont != NULL) {
@@ -684,6 +732,16 @@ void CloseFonts() {
         TTF_CloseFont(g_pFontLarge);
         g_pFontLarge = NULL;
     }
+    if (g_pFontDisplay != NULL) {
+        TTF_CloseFont(g_pFontDisplay);
+        g_pFontDisplay = NULL;
+    }
+    if (g_pFontScript != NULL && g_pFontScript != g_pFontDisplay) {
+        TTF_CloseFont(g_pFontScript);
+        g_pFontScript = NULL;
+    } else {
+        g_pFontScript = NULL;
+    }
 }
 void LoadTextures() {
     if (!g_pAtlas)
@@ -693,6 +751,8 @@ void LoadTextures() {
     g_pAtlas->LoadTexture("data/Bitmap/atlas.png");
     g_pCockpitAtlas->LoadTexture("data/Bitmap/atlas2.png");
     InitAtlasCoord();
+    GetRenderDevice()->WarmupGL();
+    GetRenderDevice()->SetTexture(0, g_pAtlas);
     printf("Texture loaded\n");
 }
 void CreateBuffers(RenderDevice* pDevice) {
@@ -960,6 +1020,23 @@ static void UpdateProjectedRenderPositions(void) {
     opponent_render_z = opponent_z;
     if (bMultiplayerMode)
         ProjectCarRenderPositionToRoadNormalForInstance(1, &opponent_render_x, &opponent_render_y, &opponent_render_z);
+
+    sp_opp_x[0] = opponent_x;
+    sp_opp_y[0] = opponent_y;
+    sp_opp_z[0] = opponent_z;
+    sp_opp_x_angle[0] = opponent_x_angle;
+    sp_opp_y_angle[0] = opponent_y_angle;
+    sp_opp_z_angle[0] = opponent_z_angle;
+    sp_opp_render_x[0] = opponent_render_x;
+    sp_opp_render_y[0] = opponent_render_y;
+    sp_opp_render_z[0] = opponent_render_z;
+
+    const long oppCount = ActiveSpOpponentDrawCount();
+    for (long i = 1; i < oppCount; ++i) {
+        sp_opp_render_x[i] = sp_opp_x[i];
+        sp_opp_render_y[i] = sp_opp_y[i];
+        sp_opp_render_z[i] = sp_opp_z[i];
+    }
 }
 
 static void PrimeMultiplayerPlayer2StartFromSinglePlayerOpponent(void) {
@@ -999,6 +1076,31 @@ static void CapturePreviousCarState(void) {
     prev_opponent_render_x = opponent_render_x;
     prev_opponent_render_y = opponent_render_y;
     prev_opponent_render_z = opponent_render_z;
+
+    const long oppCount = ActiveSpOpponentDrawCount();
+    for (long i = 0; i < oppCount; ++i) {
+        if (i == 0) {
+            sp_opp_x[0] = opponent_x;
+            sp_opp_y[0] = opponent_y;
+            sp_opp_z[0] = opponent_z;
+            sp_opp_x_angle[0] = opponent_x_angle;
+            sp_opp_y_angle[0] = opponent_y_angle;
+            sp_opp_z_angle[0] = opponent_z_angle;
+            sp_opp_render_x[0] = opponent_render_x;
+            sp_opp_render_y[0] = opponent_render_y;
+            sp_opp_render_z[0] = opponent_render_z;
+        }
+        prev_sp_opp_x[i] = sp_opp_x[i];
+        prev_sp_opp_y[i] = sp_opp_y[i];
+        prev_sp_opp_z[i] = sp_opp_z[i];
+        prev_sp_opp_x_angle[i] = sp_opp_x_angle[i];
+        prev_sp_opp_y_angle[i] = sp_opp_y_angle[i];
+        prev_sp_opp_z_angle[i] = sp_opp_z_angle[i];
+        prev_sp_opp_render_x[i] = sp_opp_render_x[i];
+        prev_sp_opp_render_y[i] = sp_opp_render_y[i];
+        prev_sp_opp_render_z[i] = sp_opp_render_z[i];
+    }
+
     prev_viewpoint1_x = viewpoint1_x;
     prev_viewpoint1_y = viewpoint1_y;
     prev_viewpoint1_z = viewpoint1_z;
@@ -1054,6 +1156,18 @@ static void UpdateInterpolatedCarTransforms(RenderDevice* pDevice, float alpha) 
     float opponentCarYOffset = GetOpponentCarRenderYOffset();
     BuildCarWorldTransform(&matWorldOpponentsCar, opponentX, opponentY, opponentZ, opponentXa, opponentYa, opponentZa,
                            opponentCarYOffset);
+    matWorldSpOpponents[0] = matWorldOpponentsCar;
+
+    const long oppCount = ActiveSpOpponentDrawCount();
+    for (long i = 1; i < oppCount; ++i) {
+        const float ox = LerpFixedCoord(prev_sp_opp_render_x[i], sp_opp_render_x[i], alpha);
+        const float oy = LerpFixedCoord(prev_sp_opp_render_y[i], sp_opp_render_y[i], alpha);
+        const float oz = LerpFixedCoord(prev_sp_opp_render_z[i], sp_opp_render_z[i], alpha);
+        const float oxa = LerpWrappedRadians(prev_sp_opp_x_angle[i], sp_opp_x_angle[i], alpha);
+        const float oya = LerpWrappedRadians(prev_sp_opp_y_angle[i], sp_opp_y_angle[i], alpha);
+        const float oza = LerpWrappedRadians(prev_sp_opp_z_angle[i], sp_opp_z_angle[i], alpha);
+        BuildCarWorldTransform(&matWorldSpOpponents[i], ox, oy, oz, oxa, oya, oza, opponentCarYOffset);
+    }
 
     glm::mat4 matRot, matTemp, matTrans, matView;
     static glm::vec3 vUpVec(0.0f, 1.0f, 0.0f);
@@ -1131,6 +1245,13 @@ static void SetOpponentsCarWorldTransform(void) {
     BuildCarWorldTransform(&matWorldOpponentsCar, FixedPointToWorldCoord(opponent_render_x),
                            FixedPointToWorldCoord(opponent_render_y), FixedPointToWorldCoord(opponent_render_z),
                            opponent_x_angle, opponent_y_angle, opponent_z_angle, opponentCarYOffset);
+    matWorldSpOpponents[0] = matWorldOpponentsCar;
+    const long oppCount = ActiveSpOpponentDrawCount();
+    for (long i = 1; i < oppCount; ++i) {
+        BuildCarWorldTransform(&matWorldSpOpponents[i], FixedPointToWorldCoord(sp_opp_render_x[i]),
+                               FixedPointToWorldCoord(sp_opp_render_y[i]), FixedPointToWorldCoord(sp_opp_render_z[i]),
+                               sp_opp_x_angle[i], sp_opp_y_angle[i], sp_opp_z_angle[i], opponentCarYOffset);
+    }
 }
 
 static void RestartEngineAudioBuffers(bool resetEngineModel) {
@@ -1367,38 +1488,10 @@ static void ResolveTrackMenuSelection(long selection, TrackPack* pack, long* tra
 
 static void HandleTrackMenu(TextHelper& txtHelper) {
     long track_number;
-    float textScale = GetTextScale();
-    const SurfaceDesc* pd3dsdBackBuffer = GetBackBufferSurfaceDesc();
-    int titleSize = static_cast<int>(30 * textScale);
-    int regularSize = static_cast<int>(15 * textScale);
-    if (titleSize < 1)
-        titleSize = 1;
-    if (regularSize < 1)
-        regularSize = 1;
 
-    const int titleY = static_cast<int>(15 * 3 * textScale);
-    const int subtitleY = titleY + titleSize;
-    const int trackY = static_cast<int>(15 * 9 * textScale);
-    const int packY = trackY + regularSize;
-    const int bottomInfoY = static_cast<int>(pd3dsdBackBuffer->Height - 15 * 9 * textScale);
-
-    txtHelper.SetDisplaySize(titleSize);
-    DrawCenteredTextLine(txtHelper, L"Multi Stunt Car", titleY);
-
-    txtHelper.SetDisplaySize(regularSize);
-    DrawCenteredTextLine(txtHelper, L"Alpha Version - WIP", subtitleY);
-    {
-        std::wstringstream ss;
-        ss << L"Track: " << (TrackID == NO_TRACK ? L"None" : GetTrackName(TrackID));
-        DrawCenteredTextLine(txtHelper, ss.str(), trackY);
-    }
-    {
-        std::wstringstream ss;
-        ss << L"Track Pack: " << GetTrackPackName();
-        DrawCenteredTextLine(txtHelper, ss.str(), packY);
-    }
-    DrawCenteredTextLine(txtHelper, L"Left/Right or D-pad = change track.  Enter or A = select.  Escape = quit.", bottomInfoY);
-    DrawCenteredTextLine(txtHelper, L"'L' to switch Super League On/Off", bottomInfoY + regularSize);
+    DrawTrackMenuBrand(txtHelper, g_pFontDisplay, g_pFontScript, g_pSprite,
+                       (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
+                       IsAmigaPhysicsUpgradeEnabled(), IsSpeedFeelEnabled(), GetTimeSeconds());
 
     const bool goPrev = (keyPress == SDLK_LEFT);
     const bool goNext = (keyPress == SDLK_RIGHT);
@@ -1475,6 +1568,8 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
 #endif
         bNewGame = TRUE; // Used here just to reset the opponent's car, which is then shown during the track preview
         ResetPlayer(); // Also reset player to clear values if there was a previous game (CarBehaviour normally does this, but isn't called for track preview)
+        InvalidateOpponentInstances();
+        ResetTrackPreviewBrandMotion(GetTimeSeconds());
         GameMode = TRACK_PREVIEW;
         bPlayerPaused = bOpponentPaused = FALSE;
         keyPress = '\0';
@@ -1490,14 +1585,6 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
 /*    ======================================================================================= */
 
 static void HandleTrackPreview(TextHelper& txtHelper) {
-    // output instructions
-    const SurfaceDesc* pd3dsdBackBuffer = GetBackBufferSurfaceDesc();
-    float textScale = GetTextScale();
-    const int leftX = static_cast<int>((2 + (wideScreen ? 10 : 0)) * textScale);
-    int lineStep = static_cast<int>(15 * textScale);
-    if (lineStep < 1)
-        lineStep = 1;
-
     const bool selectSinglePlayer = (keyPress == SDLK_LEFT);
     const bool selectMultiplayer = (keyPress == SDLK_RIGHT);
     if (selectSinglePlayer || selectMultiplayer) {
@@ -1505,7 +1592,6 @@ static void HandleTrackPreview(TextHelper& txtHelper) {
         // Left/Right explicitly selects single vs multiplayer; faux mode remains a hidden F8 toggle.
         bFauxMultiplayerMode = false;
 #ifdef USE_SDL2
-        // Re-pick Player 1 controller when multiplayer is selected and started.
         g_pendingMultiplayerStarterIsKeyboard = false;
         g_pendingMultiplayerStarterInstanceId = -1;
         g_multiplayerPlayer1IsKeyboard = false;
@@ -1514,46 +1600,29 @@ static void HandleTrackPreview(TextHelper& txtHelper) {
         keyPress = '\0';
     }
 
-    const int topStartY = lineStep;
-    std::wstringstream trackLine;
-    trackLine << L"Selected track - " << (TrackID == NO_TRACK ? L"None" : GetTrackName(TrackID));
-    DrawCenteredTextLine(txtHelper, trackLine.str(), topStartY);
-    DrawCenteredTextLine(txtHelper, L"Press Enter or A to start game", topStartY + lineStep);
-    DrawCenteredTextLine(txtHelper, L"'M', Select or Escape = back to track menu", topStartY + lineStep * 2);
-    DrawCenteredTextLine(txtHelper, L"(Press F4 to change scenery)", topStartY + lineStep * 3);
+    if (!bMultiplayerMode) {
+        if (keyPress == SDLK_UP) {
+            const long before = GetSinglePlayerOpponentCount();
+            SetSinglePlayerOpponentCount(before + 1);
+            if (GetSinglePlayerOpponentCount() != before) {
+                InvalidateOpponentInstances();
+                bNewGame = TRUE;
+            }
+            keyPress = '\0';
+        } else if (keyPress == SDLK_DOWN) {
+            const long before = GetSinglePlayerOpponentCount();
+            SetSinglePlayerOpponentCount(before - 1);
+            if (GetSinglePlayerOpponentCount() != before) {
+                InvalidateOpponentInstances();
+                bNewGame = TRUE;
+            }
+            keyPress = '\0';
+        }
+    }
 
-    int controlsLineCount = 6;
-    if (bMultiplayerMode)
-        ++controlsLineCount;
-    if (bFauxMultiplayerMode)
-        ++controlsLineCount;
-    const int controlsStartY = pd3dsdBackBuffer->Height - lineStep - controlsLineCount * lineStep;
-
-    const int topSectionEndY = topStartY + lineStep * 4;
-    int multiplayerToggleY = ((topSectionEndY + controlsStartY) / 2) - lineStep;
-    if (multiplayerToggleY < topSectionEndY)
-        multiplayerToggleY = topSectionEndY;
-    const int multiplayerHintY = multiplayerToggleY + lineStep;
-    const std::wstring multiplayerModeLine = bMultiplayerMode ? L"Mode: Multiplayer" : L"Mode: Single Player";
-    DrawCenteredTextLine(txtHelper, multiplayerModeLine, multiplayerToggleY);
-    DrawCenteredTextLine(txtHelper, L"Left/Right = select Single Player / Multiplayer", multiplayerHintY);
-
-    txtHelper.SetInsertionPos(leftX, controlsStartY);
-    txtHelper.DrawTextLine(L"Keyboard controls during game :-");
-#if defined(PANDORA) || defined(PYRA)
-    txtHelper.DrawTextLine(L"  DPad = Steer, (X) = Accelerate, (B) = Brake, (R) = Nitro");
-#else
-    txtHelper.DrawTextLine(
-        L"  Arrow left = Steer left, Arrow right = Steer right, Space = Accelerate, Arrow Down = Brake");
-#endif
-    txtHelper.DrawTextLine(L"Gamepad controls :-");
-    txtHelper.DrawTextLine(L"  Left stick/D-Pad = Steer, RT = Accelerate, LT or B = Brake, A/X/RB = Boost");
-    if (bMultiplayerMode)
-        txtHelper.DrawTextLine(L"Multiplayer controls: Use gamepads or keyboard.");
-    if (bFauxMultiplayerMode)
-        txtHelper.DrawTextLine(L"Faux multiplayer: normal controls for Player 1, AI drives Player 2");
-    txtHelper.DrawTextLine(L"  R = Point car in opposite direction, P = Pause, O = Unpause");
-    txtHelper.DrawTextLine(L"  M, Select or Escape = Back to track menu");
+    DrawTrackPreviewBrand(txtHelper, g_pFontDisplay, g_pFontScript, g_pSprite,
+                          (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
+                          bMultiplayerMode != FALSE, GetSinglePlayerOpponentCount(), GetTimeSeconds());
 
     if (keyPress == STARTMENU) {
 #ifdef USE_SDL2
@@ -1569,6 +1638,7 @@ static void HandleTrackPreview(TextHelper& txtHelper) {
 #endif
         RestartEngineAudioBuffers(true);
         PrimeMultiplayerPlayer2StartFromSinglePlayerOpponent();
+        InvalidateOpponentInstances();
         bNewGame = TRUE;
         GameMode = GAME_IN_PROGRESS;
         g_restartEngineAudioOnFirstInput = true;
@@ -1903,6 +1973,18 @@ void RenderText(double fTime) {
                << L"Ticks  Physics: " << g_physicsTickTotal << L"  Logic: " << g_baseLogicTickTotal;
             txtHelper.DrawFormattedTextLine(ss.str());
         }
+        {
+            std::wstringstream ss;
+            ss << L"Physics: " << (IsAmigaPhysicsUpgradeEnabled() ? L"Amiga+" : L"Classic") << L" ["
+               << GetPhysicsProfileId() << L"]";
+            txtHelper.DrawFormattedTextLine(ss.str());
+        }
+        {
+            std::wstringstream ss;
+            ss << L"Speed feel: " << (IsSpeedFeelEnabled() ? L"On" : L"Off") << L" [" << GetSpeedFeelProfileId()
+               << L"]";
+            txtHelper.DrawFormattedTextLine(ss.str());
+        }
 
 #if defined(DEBUG) || defined(_DEBUG)
         // Output VALUE1, VALUE, VALUE3
@@ -1936,12 +2018,12 @@ void RenderText(double fTime) {
         const SurfaceDesc* pd3dsdBackBuffer = GetBackBufferSurfaceDesc();
         // Output opponent's name for four seconds at race start (single-player and faux multiplayer only).
         if (!bMultiplayerMode && ((GetTimeSeconds() - gameStartTime) < 4.0) && (opponentsID != NO_OPPONENT)) {
-            std::wstring opponentName = opponentNames[opponentsID] ? opponentNames[opponentsID] : L"";
-            while (!opponentName.empty() && opponentName.back() == L' ')
-                opponentName.pop_back();
-
             std::wstringstream ss;
-            ss << L"Opponent: " << opponentName;
+            const long pack = GetSinglePlayerOpponentCount();
+            if (pack > 1)
+                ss << L"vs " << GetOpponentDisplayName(opponentsID) << L" + " << (pack - 1) << L" rivals";
+            else
+                ss << L"Opponent: " << GetOpponentDisplayName(opponentsID);
             const std::wstring opponentLabel = ss.str();
 
             GLint vp[4];
@@ -1957,6 +2039,17 @@ void RenderText(double fTime) {
         }
         if (!IsSplitScreenMode())
             DrawGameplayCockpitHudForInstance(txtHelper, 0, lapNumber[PLAYER], CalculateOpponentsDistance());
+
+        if (GetTimeSeconds() < g_physicsHudFlashUntil) {
+            std::wstringstream ss;
+            ss << L"Physics: " << (IsAmigaPhysicsUpgradeEnabled() ? L"Amiga+" : L"Classic");
+            DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>(40 * textScale));
+        }
+        if (GetTimeSeconds() < g_speedFeelHudFlashUntil) {
+            std::wstringstream ss;
+            ss << L"Speed feel: " << (IsSpeedFeelEnabled() ? L"On" : L"Off");
+            DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>((40 + 18) * textScale));
+        }
 
         txtHelper.End();
 
@@ -2034,7 +2127,7 @@ static void SetPerspectiveDepthRange(RenderDevice* pDevice, FLOAT nearPlane, FLO
     const FLOAT fAspect = (vp[3] > 0) ? (static_cast<FLOAT>(vp[2]) / static_cast<FLOAT>(vp[3])) : (4.0f / 3.0f);
 
     glm::mat4 matProj;
-    mat4PerspectiveFov(&matProj, PI / 4, fAspect, nearPlane, farPlane);
+    mat4PerspectiveFov(&matProj, GetSpeedFeelFovY(), fAspect, nearPlane, farPlane);
     pDevice->SetTransform(TS_PROJECTION, &matProj);
 }
 
@@ -2094,17 +2187,22 @@ static void RenderWorldGeometry(RenderDevice* pDevice, bool drawPlayer1Car, bool
 
     case TRACK_PREVIEW:
         if (drawPlayer2Car) {
-            // Draw player 2 / opponent car
-            pDevice->SetTransform(TS_WORLD, &matWorldOpponentsCar);
-            DrawCar(pDevice);
+            const long oppCount = ActiveSpOpponentDrawCount();
+            for (long i = 0; i < oppCount; ++i) {
+                pDevice->SetTransform(TS_WORLD, (i == 0) ? &matWorldOpponentsCar : &matWorldSpOpponents[i]);
+                DrawCar(pDevice);
+            }
         }
         break;
 
     case GAME_IN_PROGRESS:
     case GAME_OVER:
         if (drawPlayer2Car) {
-            pDevice->SetTransform(TS_WORLD, &matWorldOpponentsCar);
-            DrawCar(pDevice);
+            const long oppCount = ActiveSpOpponentDrawCount();
+            for (long i = 0; i < oppCount; ++i) {
+                pDevice->SetTransform(TS_WORLD, (i == 0) ? &matWorldOpponentsCar : &matWorldSpOpponents[i]);
+                DrawCar(pDevice);
+            }
         }
         if (drawPlayer1Car) {
             pDevice->SetTransform(TS_WORLD, &matWorldCar);
@@ -2298,6 +2396,8 @@ void CALLBACK OnFrameRender(RenderDevice* pDevice, double fTime, float fElapsedT
             // Restore full viewport for text rendering and subsequent frames.
             glViewport(fullVp[0], fullVp[1], fullVp[2], fullVp[3]);
             SetPerspectiveDepthRange(pDevice, PERSPECTIVE_NEAR, PERSPECTIVE_FAR);
+            UpdateSpeedFeel(fElapsedTime);
+            DrawSpeedFeelOverlay(pDevice);
         } else {
         // Disable Z buffer and polygon culling, ready for DrawBackdrop()
         pDevice->SetRenderState(RS_ZENABLE, FALSE);
@@ -2318,6 +2418,9 @@ void CALLBACK OnFrameRender(RenderDevice* pDevice, double fTime, float fElapsedT
         V(pDevice->Clear(0, NULL, CLEAR_ZBUFFER, 0, 1.0f, 0));
         SetPerspectiveDepthRange(pDevice, PERSPECTIVE_NEAR, PERSPECTIVE_NEAR_PASS_FAR);
         RenderWorldGeometry(pDevice, bOutsideView, true);
+
+        UpdateSpeedFeel(fElapsedTime);
+        DrawSpeedFeelOverlay(pDevice);
         }
 
         if ((GameMode == GAME_IN_PROGRESS) || (GameMode == GAME_OVER)) {
@@ -2697,6 +2800,18 @@ bool process_events() {
                 bShowStats = !bShowStats;
                 break;
 
+            case SDLK_u:
+                ToggleAmigaPhysicsUpgrade();
+                g_physicsHudFlashUntil = GetTimeSeconds() + 2.0;
+                keyPress = '\0';
+                break;
+
+            case SDLK_i:
+                ToggleSpeedFeel();
+                g_speedFeelHudFlashUntil = GetTimeSeconds() + 2.0;
+                keyPress = '\0';
+                break;
+
             case SDLK_F6:
                 bPlayerPaused = !bPlayerPaused;
                 break;
@@ -2712,6 +2827,7 @@ bool process_events() {
                     if (bMultiplayerMode) {
                         bFauxMultiplayerMode = FALSE;
                         opponentsID = NO_OPPONENT;
+                        InvalidateOpponentInstances();
                     } else {
 #ifdef USE_SDL2
                         g_pendingMultiplayerStarterIsKeyboard = false;
@@ -2747,6 +2863,7 @@ bool process_events() {
                     g_restartEngineAudioOnFirstInput = false;
 
                     opponentsID = NO_OPPONENT;
+                    InvalidateOpponentInstances();
 
                     // reset all animated objects
                     ResetDrawBridge();
@@ -2815,6 +2932,7 @@ bool process_events() {
                     GameMode = TRACK_MENU;
                     g_restartEngineAudioOnFirstInput = false;
                     opponentsID = NO_OPPONENT;
+                    InvalidateOpponentInstances();
                     ResetDrawBridge();
                 }
                 break;
@@ -2881,6 +2999,7 @@ bool process_events() {
                 GameMode = TRACK_MENU;
                 g_restartEngineAudioOnFirstInput = false;
                 opponentsID = NO_OPPONENT;
+                InvalidateOpponentInstances();
                 ResetDrawBridge();
                 break;
             }
@@ -2895,6 +3014,7 @@ bool process_events() {
                         GameMode = TRACK_MENU;
                         g_restartEngineAudioOnFirstInput = false;
                         opponentsID = NO_OPPONENT;
+                        InvalidateOpponentInstances();
                         ResetDrawBridge();
                     } else
                         keyPress = SDLK_RETURN;
@@ -2904,6 +3024,7 @@ bool process_events() {
                         GameMode = TRACK_MENU;
                         g_restartEngineAudioOnFirstInput = false;
                         opponentsID = NO_OPPONENT;
+                        InvalidateOpponentInstances();
                         ResetDrawBridge();
                     }
                 } else if (((GameMode == TRACK_MENU) || (GameMode == TRACK_PREVIEW)) &&
@@ -3040,6 +3161,7 @@ static bool RunFrame(double frameTime, bool allowQuit) {
         GameMode = TRACK_MENU;
         g_restartEngineAudioOnFirstInput = false;
         opponentsID = NO_OPPONENT;
+        InvalidateOpponentInstances();
         ResetDrawBridge();
     }
 #endif
@@ -3070,6 +3192,8 @@ static bool RunFrame(double frameTime, bool allowQuit) {
         const double interpolationResetDelta = 2.0 * g_physicsStepSeconds;  // e.g. ~2 physics steps
         if (GameMode != s_prevGameMode || frameDelta > interpolationResetDelta) {
             have_prev_car_state = false;
+            if (GameMode == TRACK_MENU && s_prevGameMode != TRACK_MENU)
+                ResetTrackMenuBrandMotion(frameTime);
             s_prevGameMode = GameMode;
         }
     }
@@ -3235,9 +3359,26 @@ static bool RunFrame(double frameTime, bool allowQuit) {
                         if (bNewGame)
                             bNewGame = FALSE;
                     } else {
-                        OpponentBehaviour(&opponent_x, &opponent_y, &opponent_z, &opponent_x_angle,
-                                          &opponent_y_angle, &opponent_z_angle, bOpponentPaused,
-                                          (float)g_physicsStepSeconds);
+                        const long oppCount = ActiveSpOpponentDrawCount();
+                        for (long i = 0; i < oppCount; ++i) {
+                            const long prevOpp = PushOpponentInstance(i);
+                            if (i == 0) {
+                                OpponentBehaviour(&opponent_x, &opponent_y, &opponent_z, &opponent_x_angle,
+                                                  &opponent_y_angle, &opponent_z_angle, bOpponentPaused,
+                                                  (float)g_physicsStepSeconds);
+                                sp_opp_x[0] = opponent_x;
+                                sp_opp_y[0] = opponent_y;
+                                sp_opp_z[0] = opponent_z;
+                                sp_opp_x_angle[0] = opponent_x_angle;
+                                sp_opp_y_angle[0] = opponent_y_angle;
+                                sp_opp_z_angle[0] = opponent_z_angle;
+                            } else {
+                                OpponentBehaviour(&sp_opp_x[i], &sp_opp_y[i], &sp_opp_z[i], &sp_opp_x_angle[i],
+                                                  &sp_opp_y_angle[i], &sp_opp_z_angle[i], bOpponentPaused,
+                                                  (float)g_physicsStepSeconds);
+                            }
+                            PopOpponentInstance(prevOpp);
+                        }
                         if (bFauxMultiplayerMode) {
                             long opponentPiece = 0, opponentDistanceIntoSection = 0;
                             GetOpponentRoadState(&opponentPiece, &opponentDistanceIntoSection);
@@ -3350,7 +3491,7 @@ void em_main_loop() {
 int GL_MSAA = 0;
 int main(int argc, const char** argv) {
     char maintitle[50] = {0};
-    sprintf(maintitle, "MultiStuntCar v%d.%02d.%02d", V_MAJOR, V_MINOR, V_PATCH);
+    sprintf(maintitle, "Stunt Car Racer for Lovers v%d.%02d.%02d", V_MAJOR, V_MINOR, V_PATCH);
     printf("%s\n", maintitle);
     // Run from the executable directory so relative assets (data/Bitmap, data/Sounds, data/Tracks) resolve.
     char* basePath = SDL_GetBasePath();
@@ -3693,6 +3834,7 @@ int main(int argc, const char** argv) {
     }
 #endif
     FreeData();
+    FreeSpeedFeelResources();
 
     CloseFonts();
 

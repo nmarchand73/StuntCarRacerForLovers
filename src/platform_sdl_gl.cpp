@@ -732,7 +732,7 @@ uint32_t GetStrideFromFVF(DWORD fvf) {
 // RenderDevice
 RenderDevice::RenderDevice()
     : fvf(0), mInitialized(false), mAlphaBlendEnabled(false), mSrcBlend(BLEND_SRCALPHA), mDstBlend(BLEND_INVSRCALPHA),
-      mShaderProgram(0), mDynamicVbo(0), mUniformMvp(-1), mUniformTexture(-1), mUniformTexMatrix(-1),
+      mShaderProgram(0), mDummyTexture(0), mDynamicVbo(0), mUniformMvp(-1), mUniformTexture(-1), mUniformTexMatrix(-1),
       mUniformColorMode(-1), mUniformModelView(-1), mUniformFogEnabled(-1), mUniformFogDensity(-1),
       mUniformFogHeightScale(-1), mUniformFogSkyColor(-1), mUniformSunDirView(-1), mUniformCameraPos(-1),
       mUniformWorldUpView(-1) {
@@ -752,7 +752,12 @@ RenderDevice::RenderDevice()
     mInv = glm::mat4(-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, +1, 0, 0, 0, 0, 1);
 }
 
-RenderDevice::~RenderDevice() {}
+RenderDevice::~RenderDevice() {
+    if (mDummyTexture) {
+        glDeleteTextures(1, &mDummyTexture);
+        mDummyTexture = 0;
+    }
+}
 
 bool RenderDevice::EnsureInitialized() {
     if (mInitialized)
@@ -782,6 +787,18 @@ bool RenderDevice::EnsureInitialized() {
     if (!mDynamicVbo) {
         printf("Failed to create dynamic vertex buffer\n");
         return false;
+    }
+
+    /* Complete 1x1 before any UseProgram — macOS warns if sampler sees texture 0. */
+    {
+        const unsigned char white[4] = {255, 255, 255, 255};
+        glGenTextures(1, &mDummyTexture);
+        glBindTexture(GL_TEXTURE_2D, mDummyTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
     }
 
     STGL(UseProgram)(mShaderProgram);
@@ -1030,6 +1047,14 @@ HRESULT RenderDevice::DrawPrimitive(PrimitiveType PrimitiveType, UINT StartVerte
         STGL(VertexAttrib2f)(ATTRIB_TEXCOORD, 0.0f, 0.0f);
     }
 
+    /* Shader always declares sampler2D; macOS rejects incomplete texture name 0. */
+    if (mDummyTexture) {
+        GLint bound = 0;
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+        if (bound == 0)
+            glBindTexture(GL_TEXTURE_2D, mDummyTexture);
+    }
+
     ApplyBlendState(hasTextureCoords);
     glDrawArrays(primgl[PrimitiveType - 1], 0, (GLsizei)vertexCount);
 
@@ -1101,6 +1126,8 @@ HRESULT RenderDevice::SetTexture(DWORD Sampler, GpuTexture* pTexture) {
     (void)Sampler;
     if (pTexture)
         pTexture->Bind();
+    else if (mDummyTexture)
+        glBindTexture(GL_TEXTURE_2D, mDummyTexture);
     else
         glBindTexture(GL_TEXTURE_2D, 0);
     return S_OK;
@@ -1251,7 +1278,7 @@ TextHelper::TextHelper(TTF_Font* font, GLuint sprite, int size)
             }
         }
     }
-    glBindTexture(GL_TEXTURE_2D, 0);
+    /* Keep the complete font atlas bound; avoid texture name 0 on macOS. */
 }
 
 TextHelper::~TextHelper() {
@@ -1398,7 +1425,8 @@ void TextHelper::DrawTextLine(const wchar_t* line) {
     dev->SetTextureStageState(0, TSS_COLOROP, TOP_DISABLE);
     dev->SetRenderState(RS_ALPHABLENDENABLE, FALSE);
     dev->SetRenderState(RS_ZENABLE, TRUE);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    /* Leave a complete texture bound; texture 0 triggers Apple sampler warnings. */
+    dev->SetTexture(0, NULL);
 
     m_posy += m_size;
 }

@@ -641,42 +641,39 @@ but the uncertainty comment should be resolved.
 
 
 <!-- ═══════════════════════════════════════════════════ §8 ═══ -->
-<h2><span class="num">8</span> Summary Scorecard</h2>
+<h2><span class="num">8</span> Summary Scorecard <em>(updated Aug 2026)</em></h2>
 
 <table>
   <thead>
     <tr><th>Aspect</th><th>Verdict</th></tr>
   </thead>
   <tbody>
-    <tr><td>Constants match Amiga (gravity, spring, REDUCTION, damping)</td><td class="ok">✓ All identical</td></tr>
-    <tr><td>Integration scaling architecture</td><td class="ok">✓ Correct</td></tr>
-    <tr><td>Spring inverse-scaling for step rate</td><td class="ok">✓ Mathematically sound</td></tr>
-    <tr><td>Fractional carry accumulation (61c5712)</td><td class="ok">✓ Eliminates sub-step energy loss</td></tr>
-    <tr><td>Decay functions — airborne wheel spin</td><td class="ok">✓ pow(0.75, scale) is correct</td></tr>
-    <tr><td>Boost drain decoupled from physics rate</td><td class="ok">✓</td></tr>
-    <tr><td>Damage rate-limited to logic ticks</td><td class="ok">✓ Improved with wheel bitmask</td></tr>
-    <tr><td>Opponent physics on same precision footing</td><td class="ok">✓ (e4931b6)</td></tr>
-    <tr><td>Bounce feel matches Amiga</td><td class="warn">~90% — softer due to 60 Hz discrete dynamics</td></tr>
-    <tr><td>HIGHER_FRAME_RATE dead code</td><td class="warn">⚠ Should be deleted</td></tr>
-    <tr><td>INCREASE / SPRING constant unification</td><td class="warn">⚠ Opponent not tuned by PhysicsConfig.h</td></tr>
+    <tr><td>Cited audit vs Vesuri/Amiga</td><td class="ok">✓ <code>docs/physics-audit.md</code></td></tr>
+    <tr><td>Parity harness (suspension force word-identical)</td><td class="ok">✓ <code>tools/physics_parity_harness.py</code> PASS (0 error)</td></tr>
+    <tr><td>Classic profile frozen (320/200)</td><td class="ok">✓</td></tr>
+    <tr><td>Amiga+ springs/damping (276/256 = $0114)</td><td class="ok">✓</td></tr>
+    <tr><td>Vesuri rate scaling via spring/g_physicsStepScale</td><td class="ok">✓ equivalent to $0114*N</td></tr>
+    <tr><td>Amiga+ disables remake delta slew clamp</td><td class="ok">✓</td></tr>
+    <tr><td>Air/ground angular damping (Vesuri ASR#4/#1)</td><td class="ok">✓ Amiga+ only</td></tr>
+    <tr><td>Opponent uses active profile springs</td><td class="ok">✓</td></tr>
+    <tr><td>Runtime Classic ↔ Amiga+ toggle</td><td class="ok">✓ key <code>U</code> (P = pause)</td></tr>
+    <tr><td>Default profile</td><td class="ok">✓ Amiga+ ON after harness</td></tr>
+    <tr><td>HIGHER_FRAME_RATE dead code</td><td class="ok">✓ removed</td></tr>
+    <tr><td>Draw Bridge lift.car.onto.track</td><td class="ok">✓ stages ported</td></tr>
+    <tr><td>TIMESTEP per-substep vs Vesuri integer $EE/N</td><td class="warn">~ sum over N steps within ±1 (fractional carry)</td></tr>
   </tbody>
 </table>
 
 <p>
-  <strong>Bottom line:</strong> The port's physics are faithful. The scaling architecture
-  is solid and the recent carry-based integration commits nail the sub-step precision
-  problem. The car will feel slightly less bouncy than the Amiga because a well-sampled
-  spring-damper oscillates less than an undersampled one. With
-  <code>SPRING = 320</code> / <code>DAMPING = 200</code> now applied, the system
-  should be noticeably closer to the Amiga feel. Keep iterating in
-  <code>PhysicsConfig.h</code> — that is exactly what it is there for.
+  <strong>Bottom line:</strong> Amiga+ is the exact Amiga/Vesuri constant path (no invented springs).
+  Press <code>U</code> to A/B against Classic. Run <code>python3 tools/physics_parity_harness.py</code> after any suspension change.
 </p>
 
 <hr>
 
 <footer>
-  Stunt Car Racer Physics Review · Generated 18 April 2026 ·
-  src/Car_Behaviour.cpp · src/PhysicsConfig.h · reference/StuntCarRacer.s
+  Stunt Car Racer Physics Review · Updated Aug 2026 ·
+  src/Car_Behaviour.cpp · src/PhysicsConfig.h · docs/physics-audit.md · reference/StuntCarRacer.s
 </footer>
 
 </body>

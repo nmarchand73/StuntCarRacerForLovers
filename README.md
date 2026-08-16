@@ -1,6 +1,6 @@
-# Multi Stunt Car
+# Stunt Car Racer for Lovers
 
-This is a fork of *StuntCarRemake* with two player and reworked physics for uncapped frame rate.
+A fork of *StuntCarRemake* (Stunt Car Racer) with two-player support and reworked physics for uncapped frame rate.
 
 Play: https://retro-foundry.github.io/multistuntcar/
 
@@ -81,3 +81,21 @@ python tools/generate_original_tracks.py
 - Original project: http://sourceforge.net/projects/stuntcarremake/
 - Forked from: https://github.com/ptitSeb/stuntcarremake
 - Some original sound-loading code came from Forsaken/ProjectX port work by chino.
+
+## Physics profiles (Classic / Amiga+)
+
+- **Amiga+** (default): Amiga/Vesuri springs `276` (`$0114`), damping `256`, Vesuri air/ground angular damping, no remake delta-slew clamp. See `docs/physics-audit.md`.
+- **Classic**: frozen remake springs `320` / damping `200`.
+- Toggle in-game with **`U`** (`P` remains pause). Env override: `SCR_AMIGA_PHYSICS=0|1`.
+- Parity check: `python3 tools/physics_parity_harness.py`
+
+## Speed feel (presentation)
+
+- Acceleration-driven **FOV punch** + subtle **radial blur** of the 3D view (center sharp for gaps; soft rim darken). No chromatic junk.
+- Toggle with **`I`**. Env: `SCR_SPEED_FEEL=0|1`. Default **on**.
+
+## Track preview
+
+- **Left / Right**: Single Player ↔ Multiplayer
+- **Up / Down** (single-player): opponent pack size **1–4** AI cars on track
+- **Enter / A**: start race

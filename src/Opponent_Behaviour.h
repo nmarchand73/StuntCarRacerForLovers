@@ -6,6 +6,7 @@
 /*    Constants */
 /*    ========= */
 #define NO_OPPONENT (-1)
+#define MAX_SP_OPPONENTS (4)
 
 /*    ===================== */
 /*    Structure definitions */
@@ -34,5 +35,17 @@ extern void UpdateInterpolatedOpponentShadow(float alpha);
 extern void CapturePreviousPlayerShadowForInstance(long instanceIndex);
 extern void UpdatePlayerShadowForInstance(long instanceIndex);
 extern void UpdateInterpolatedPlayerShadowForInstance(long instanceIndex, float alpha);
+
+/** Single-player on-track AI pack size (1..MAX_SP_OPPONENTS). Ignored in multiplayer. */
+extern void SetSinglePlayerOpponentCount(long count);
+extern long GetSinglePlayerOpponentCount(void);
+
+extern long PushOpponentInstance(long instanceIndex);
+extern void PopOpponentInstance(long previousInstance);
+extern long GetActiveOpponentInstance(void);
+extern void InvalidateOpponentInstances(void);
+
+/** Trimmed display name for opponentsID (no trailing spaces). */
+extern const WCHAR* GetOpponentDisplayName(long opponentsId);
 
 #endif /* _OPPONENT_BEHAVIOUR */

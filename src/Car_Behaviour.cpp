@@ -32,13 +32,9 @@
  **************************************************************************/
 
 /*
- * Unfortunately these HIGHER_FRAME_RATE changes didn't work...
- *
-//#define    HIGHER_FRAME_RATE    // to cater for four times frame rate
-// 10/12/1998 - engine_z_acceleration not now reduced (to enable car to jump as before)
-//              - could try limiting the top speed instead (should be better)
-//    or try REDUCTION of 202, INCREASE of 306
-*/
+ * HIGHER_FRAME_RATE experiment removed — superseded by g_physicsStepScale /
+ * PhysicsConfig Amiga+ profile (see docs/physics-audit.md).
+ */
 
 /*    ============= */
 /*    Include files */
@@ -158,7 +154,7 @@ long engine_power = 240;    // (240 standard, 320 super)
 long boost_unit_value = 16; // (16 standard, 12 super)
 
 static long left_right_value;
-static long engine_z_acceleration;
+long engine_z_acceleration = 0;
 /*static*/ long boost_activated;
 
 static long rear_wheel_x_offset, rear_wheel_z_offset;
@@ -187,8 +183,13 @@ static long smaller_limit_required = FALSE;
 
 static long wreck_wheel_height_reduction = 0; // 0x200 if wrecked
 
-// set the on_chains flag to FALSE for now (won't implement chains at first)
+// on_chains mirrors Amiga car.on.chains.countdown > 0 (lift.car.onto.track)
 static long on_chains = FALSE;
+static long car_on_chains_countdown = 0; /* 0 = not on chains (Amiga car.on.chains.countdown) */
+static long swing_from_left = 0;         /* Amiga swing.from.left (bit7 set = from left) */
+static long swing_magnitude = 0;         /* Amiga swing.magnitude (signed word, high byte used) */
+static long required_raise_height = 0;   /* Amiga required.raise.height */
+static long g_liftBoostPressed = FALSE;  /* boost/fire for chain release */
 
 static long player_distance_off_road; // used to determine the value below
 static long off_map_status = 0;       // not set exactly like Amiga StuntCarRacer
@@ -349,6 +350,9 @@ static void CalculateWheelCollision(long road_height, long actual_height, long* 
 static void CalculateCarCollisionAcceleration(long average_amount_below_road);
 static void CalculateInclinationSinCos(long inclination_in, long* inclination_sin_out, long* inclination_cos_out);
 static void LiftCarOntoTrack(void);
+static long SwingCar(long adjustment);
+static long RaiseCarOffGround(long amount);
+static void InitDrawBridgeLiftState(void);
 
 static void CalculateTotalAcceleration(void);
 static long GetTwiceCollisionYAcceleration(void);
@@ -452,8 +456,12 @@ void ResetPlayer(void) {
     drop_start_done = TRUE;
     touching_road = FALSE;
 
-    // set the on_chains flag to FALSE for now (won't implement chains at first)
     on_chains = FALSE;
+    car_on_chains_countdown = 0;
+    swing_from_left = 0;
+    swing_magnitude = 0;
+    required_raise_height = 0;
+    g_liftBoostPressed = FALSE;
 
     // calculated
     player_distance_off_road = 0;
@@ -594,6 +602,7 @@ static void CarBehaviourActiveInstance(DWORD input, long* x, long* y, long* z, l
 
         if (reset_from_off_track) {
             PositionCarAbovePiece(player_current_piece);
+            InitDrawBridgeLiftState();
         } else {
             if (bNewGame && bMultiplayerMode && (GetActiveCarBehaviourInstance() == 1)) {
                 // In 2-player mode, let player 2 start from the same spawn transform as
@@ -608,10 +617,13 @@ static void CarBehaviourActiveInstance(DWORD input, long* x, long* y, long* z, l
                 PositionCarAbovePiece(PlayersStartPiece);
             }
 
+            InitDrawBridgeLiftState();
+
             if (bNewGame && bMultiplayerMode)
                 RememberRespawnRoadSideFromCurrentPosition();
         }
-        drop_start_done = FALSE;
+        if (!on_chains)
+            drop_start_done = FALSE;
         RequestRestartEngineAudioOnFirstInput(); /* engine audio restarts on next keyboard/gamepad input */
 
         if (bNewGame) {
@@ -638,8 +650,8 @@ static void CarBehaviourActiveInstance(DWORD input, long* x, long* y, long* z, l
     CalculatePlayersRoadPosition();
     UpdateEngineRevs();
 
-    if (touching_road)
-        drop_start_done = TRUE; // Amiga StuntCarRacer does this differently
+    if (touching_road && !on_chains)
+        drop_start_done = TRUE; // Amiga sets this on chain release; remake also latches on first touch
 
     // output player values for use by functions that draw the world
     *x = player_x;
@@ -930,6 +942,7 @@ static void CarControl(DWORD input) {
         boost_flag = FALSE;
     else
         boost_flag = TRUE;
+    g_liftBoostPressed = boost ? TRUE : FALSE;
 
     if ((player_z_speed < 120 * 256) && (!on_chains) && (NOT_WRECKED)) {
         if (accelerate) {
@@ -1971,15 +1984,6 @@ static void CalculateGravityAcceleration(void) {
     // Acceleration along car's Z axis
     gravity_z_acceleration = ((-GRAVITY_ACCELERATION * static_cast<long>(trig_coeffs[Z_Y_COMP])) >> LOG_PRECISION);
 
-#ifdef HIGHER_FRAME_RATE
-    // 08/11/1998 - allow four times the frame rate by dividing accelerations by four
-    gravity_x_acceleration++;
-    gravity_y_acceleration++;
-    gravity_z_acceleration++;
-    gravity_x_acceleration >>= 1;
-    gravity_y_acceleration >>= 1;
-    gravity_z_acceleration >>= 1;
-#endif
     return;
 }
 
@@ -2035,17 +2039,17 @@ static void CarCollisionDetection(void) {
     // Front left wheel collision
     CalculateWheelCollision(front_left_road_height, front_left_actual_height, &front_left_height_difference,
                             &old_front_left_difference, &front_left_amount_below_road, &front_left_damage,
-                            FRONT_SUSPENSION_SPRING, FRONT_SUSPENSION_DAMPING, kDamageMaskFrontLeftWheel);
+                            GetActiveFrontSpring(), GetActiveFrontDamping(), kDamageMaskFrontLeftWheel);
 
     // Front right wheel collision
     CalculateWheelCollision(front_right_road_height, front_right_actual_height, &front_right_height_difference,
                             &old_front_right_difference, &front_right_amount_below_road, &front_right_damage,
-                            FRONT_SUSPENSION_SPRING, FRONT_SUSPENSION_DAMPING, kDamageMaskFrontRightWheel);
+                            GetActiveFrontSpring(), GetActiveFrontDamping(), kDamageMaskFrontRightWheel);
 
     // Rear wheel collision
     CalculateWheelCollision(rear_road_height, rear_actual_height, &rear_height_difference, &old_rear_difference,
-                            &rear_amount_below_road, &rear_damage,
-                            REAR_SUSPENSION_SPRING, REAR_SUSPENSION_DAMPING, kDamageMaskRearWheel);
+                            &rear_amount_below_road, &rear_damage, GetActiveRearSpring(), GetActiveRearDamping(),
+                            kDamageMaskRearWheel);
 
     //****************************************
 
@@ -2130,7 +2134,7 @@ static void CarCollisionDetection(void) {
                 GroundedSoundBuffer->SetCurrentPosition(0);
                 GroundedSoundBuffer->Play(NULL, NULL, NULL); // not looping
             }
-            grounded_delay = 5;
+            grounded_delay = GetActiveImpactSoundCooldown();
         }
     }
 
@@ -2150,9 +2154,9 @@ static void CalculateWheelCollision(long road_height, long actual_height, long* 
     const long activeInstance = GetActiveCarBehaviourInstance();
 
     // Keep dt-scaled spring response for high-Hz playability.
-    const long spring_effective = (g_physicsStepScale > 0.0f)
-        ? (long)((float)spring / g_physicsStepScale)
-        : spring;
+    // Amiga+/Vesuri: spring=$0114(276); effective = 276/scale ≡ 276*FRAMERATE_MULTIPLIER.
+    const long spring_effective =
+        (g_physicsStepScale > 0.0f) ? (long)((float)spring / g_physicsStepScale) : spring;
 
     *height_difference_out = road_height - actual_height - wreck_wheel_height_reduction;
 
@@ -2160,37 +2164,36 @@ static void CalculateWheelCollision(long road_height, long actual_height, long* 
     if (new_difference > 0x1400)
         new_difference = 0x1400;
     else if (new_difference < -0x300)
-        new_difference = -0x300;
+        new_difference = -0x300; /* Amiga $FD00 */
 
-    // Generalized spike guard: limit how much penetration delta can change in one
-    // physics step, scaled from the original -0x300..+0x300 reference-tick range.
     long difference_delta = new_difference - *old_difference_in_out;
-    long max_difference_delta = 0x300;
-    if (g_physicsStepScale > 0.0f) {
-        const float scaled_limit_f = 0x300 * g_physicsStepScale;
-        long scaled_limit = (long)(scaled_limit_f + 0.5f);
-        if (scaled_limit < 1)
-            scaled_limit = 1;
-        max_difference_delta = scaled_limit;
-    }
     long difference_delta_clamped = difference_delta;
-    if (difference_delta_clamped > max_difference_delta)
-        difference_delta_clamped = max_difference_delta;
-    else if (difference_delta_clamped < -max_difference_delta)
-        difference_delta_clamped = -max_difference_delta;
-    if (difference_delta_clamped != difference_delta) {
-        GAP_TELEMETRY_LOG(
-            "[GAPTEL][%llu] DELTA_SLEW_CLAMP inst=%ld wheel=%s piece=%ld seg=%ld rawDelta=%ld clampDelta=%ld "
-            "limit=%ld stepScale=%.6f prevDiff=%ld newDiff=%ld\n",
-            ++g_gapTelemetryEventCounter, activeInstance, wheelName, player_current_piece, player_current_segment,
-            difference_delta, difference_delta_clamped, max_difference_delta, (double)g_physicsStepScale,
-            *old_difference_in_out, new_difference);
+    // Remake-only slew clamp — absent in Amiga; disable for Amiga+ (docs/physics-audit.md).
+    if (!AmigaPlusDisablesDeltaSlewClamp()) {
+        long max_difference_delta = 0x300;
+        if (g_physicsStepScale > 0.0f) {
+            const float scaled_limit_f = 0x300 * g_physicsStepScale;
+            long scaled_limit = (long)(scaled_limit_f + 0.5f);
+            if (scaled_limit < 1)
+                scaled_limit = 1;
+            max_difference_delta = scaled_limit;
+        }
+        if (difference_delta_clamped > max_difference_delta)
+            difference_delta_clamped = max_difference_delta;
+        else if (difference_delta_clamped < -max_difference_delta)
+            difference_delta_clamped = -max_difference_delta;
+        if (difference_delta_clamped != difference_delta) {
+            GAP_TELEMETRY_LOG(
+                "[GAPTEL][%llu] DELTA_SLEW_CLAMP inst=%ld wheel=%s piece=%ld seg=%ld rawDelta=%ld clampDelta=%ld "
+                "limit=%ld stepScale=%.6f prevDiff=%ld newDiff=%ld\n",
+                ++g_gapTelemetryEventCounter, activeInstance, wheelName, player_current_piece, player_current_segment,
+                difference_delta, difference_delta_clamped, max_difference_delta, (double)g_physicsStepScale,
+                *old_difference_in_out, new_difference);
+        }
     }
 
-    // Assembly parity for calculate.difference uses 16-bit word arithmetic:
-    // muls spring,d0 ; asr.l #8,d0 ; add.w d6,d0
-    // Keep the wheel-collision response in signed-word space to avoid overdriving
-    // penetration/damage when running with faster update rates.
+    // Assembly parity for calculate.difference / Vesuri applyMomentumAmplification:
+    // muls spring,d0 ; asr.l #8,d0 ; add.w d6,d0  (d6 = travel; damping 256 = identity)
     {
         const short delta_word = static_cast<short>(difference_delta_clamped);
         const short spring_word = static_cast<short>(spring_effective);
@@ -2352,15 +2355,6 @@ static void CalculateCarCollisionAcceleration(long average_amount_below_road) {
 
     car_collision_z_acceleration = (average_amount_below_road * surface_value) >> 8;
 
-#ifdef HIGHER_FRAME_RATE
-    // 08/11/1998 - allow four times the frame rate by dividing accelerations by four
-    car_collision_x_acceleration++;
-    car_collision_y_acceleration++;
-    car_collision_z_acceleration++;
-    car_collision_x_acceleration >>= 1;
-    car_collision_y_acceleration >>= 1;
-    car_collision_z_acceleration >>= 1;
-#endif
     return;
 }
 
@@ -2409,7 +2403,140 @@ static void CalculateInclinationSinCos(long inclination_in, long* inclination_si
     return;
 }
 
-static void LiftCarOntoTrack(void) { return; }
+static void LiftCarOntoTrack(void) {
+    /* Port of reference/StuntCarRacer.s lift.car.onto.track (7869–7986). */
+    long d1 = car_on_chains_countdown;
+    if (d1 == 0) {
+        on_chains = FALSE;
+        return;
+    }
+    on_chains = TRUE;
+
+    if (d1 >= 230) {
+        /* Initial swing magnitude setup then countdown-- */
+        long mag = 44;
+        if (swing_from_left & 0x80)
+            mag = 256 - 44;
+        swing_magnitude = (mag & 0xff) << 8; /* Amiga stores magnitude in high byte of word */
+        car_on_chains_countdown = d1 - 1;
+        return;
+    }
+
+    if (d1 == 229) {
+        SwingCar(0);
+        if (RaiseCarOffGround(3) >= 0)
+            car_on_chains_countdown = d1 - 1;
+        return;
+    }
+
+    if (d1 == 228) {
+        RaiseCarOffGround(4);
+        if (SwingCar(-1) != 0)
+            return; /* not yet at minimum magnitude */
+
+        /* Random 160–191 countdown (or practice shortcut); drop-start vs press-fire */
+        long next = 160 + (static_cast<long>(std::rand()) & 0x1f);
+        if (drop_start_done)
+            next = 60; /* press fire prompt window */
+        /* Practice mode: remake has no race.mode BMI path; keep random next */
+        car_on_chains_countdown = next;
+        return;
+    }
+
+    /* stage3: countdown <= 227 */
+    SwingCar(0);
+    RaiseCarOffGround(2);
+
+    if (fourteen_frames_elapsed == 0) {
+        car_on_chains_countdown = d1 - 1;
+        if (car_on_chains_countdown == 0)
+            car_on_chains_countdown = 1; /* hold at 1 until release */
+    }
+
+    if (drop_start_done) {
+        /* subsequent.lift: release when boost/fire pressed (Amiga boost.flag active-low BNE) */
+        if (!g_liftBoostPressed)
+            return;
+    } else {
+        if (car_on_chains_countdown != 0)
+            return;
+    }
+
+    /* car.off.chains */
+    car_on_chains_countdown = 0;
+    off_map_status = 0;
+    on_chains = FALSE;
+    drop_start_done = TRUE;
+}
+
+static long SwingCar(long adjustment) {
+    /* Port of swing.car (8012–8045). Returns 0 when magnitude reached target. */
+    long target = 16;
+    long adj = adjustment;
+    if (swing_from_left & 0x80) {
+        adj = -adj;
+        target = -16;
+    }
+
+    long delta = adj << 8;
+    delta = (delta * REDUCTION) >> 8;
+
+    long offset = ((players_road_x_position - (ROAD_WIDTH / 2)) << 5);
+    long mag_byte = (swing_magnitude >> 8) & 0xff;
+    if (mag_byte >= 0x80)
+        mag_byte -= 0x100;
+
+    if (mag_byte != target)
+        swing_magnitude += delta;
+
+    player_z_angle = swing_magnitude - offset;
+    overall_difference_below_road = 0;
+
+    mag_byte = (swing_magnitude >> 8) & 0xff;
+    if (mag_byte >= 0x80)
+        mag_byte -= 0x100;
+    return (mag_byte == target) ? 0 : 1;
+}
+
+static long RaiseCarOffGround(long amount) {
+    /* Port of raise.car.off.ground (7988–8009). Returns status byte (bpl = not done). */
+    long d0 = amount << 8;
+    long smaller_y = player_y >> 8; /* Amiga players.smaller.y */
+    long d3 = smaller_y - required_raise_height;
+    d3 -= d0;
+    d0 = d3 >> 3;
+    d0 -= 256;
+    if (d0 < 0) {
+        if (d0 < -512)
+            d0 = -512;
+    }
+    car_collision_y_acceleration -= d0;
+    long status = ((d3 >> 8) & 0xff) + 2;
+    /* Treat high bit clear / non-negative as "done" when status wraps positive large;
+       Amiga uses BPL on return — negative means keep raising. */
+    if (status >= 0x80)
+        status -= 0x100;
+    return status;
+}
+
+static void InitDrawBridgeLiftState(void) {
+    if (TrackID != DRAW_BRIDGE)
+        return;
+    car_on_chains_countdown = 230;
+    on_chains = TRUE;
+    drop_start_done = FALSE;
+    swing_magnitude = 0;
+    /* After PositionCarAbovePiece, player_y = (roadHeight + 0xc00) * 256.
+       Amiga required.raise.height ≈ rear.road.height >> 2; use road portion of smaller.y. */
+    required_raise_height = (player_y >> 8) - 0xc00;
+    if (required_raise_height < 0)
+        required_raise_height = 0;
+    CalculatePlayersRoadPosition();
+    if (players_road_x_position < (ROAD_WIDTH / 2))
+        swing_from_left = 0x80;
+    else
+        swing_from_left = 0;
+}
 
 /*    ======================================================================================= */
 /*    Function:        CalculateTotalAcceleration                                                */
@@ -2422,11 +2549,6 @@ static void CalculateTotalAcceleration(void) {
 
     player_y_acceleration = gravity_y_acceleration + car_collision_y_acceleration;
 
-#ifdef HIGHER_FRAME_RATE
-    // 08/11/1998 - allow four times the frame rate by dividing accelerations by four
-//    engine_z_acceleration++;        // 10/12/1998
-//    engine_z_acceleration >>= 1;    // 10/12/1998
-#endif
 
     // reduce engine_z_acceleration if car is accelerating and not travelling backwards
     // this probably simulates the effect of wind resistance and the
@@ -2725,11 +2847,6 @@ static void AlignCarWithRoad(void) {
     // Rate-independent: scale so alignment feels like original ~7 Hz at any physics Hz
     adjust = (long)((float)adjust * g_physicsStepScale);
 
-#ifdef HIGHER_FRAME_RATE
-    // 08/11/1998 - allow four times the frame rate by dividing adjustment by four
-    adjust++;
-    adjust >>= 1;
-#endif
 
     if (adjust == 0)
         adjust = 1; // atleast do some adjusting
@@ -2755,11 +2872,6 @@ static void AdjustSteeringAcceleration(void) {
     else
         player_y_rotation_acceleration = 0; // steering disabled
 
-#ifdef HIGHER_FRAME_RATE
-    // 08/11/1998 - allow four times the frame rate by dividing accelerations by four
-    player_y_rotation_acceleration++;
-    player_y_rotation_acceleration >>= 1;
-#endif
 
     return;
 }
@@ -3012,22 +3124,24 @@ static void CalculateXZRotationAcceleration(void) {
     //
     // - perhaps values used are really accelerations rather than inclinations
 
-    player_x_rotation_acceleration = overall_difference_below_road - (player_x_rotation_speed >> 4);
-    if (touching_road) {
-        // This part lifts the car up at the front during forwards acceleration
-        // and, vice versa, dips the front of the car during backwards acceleration.
-        player_x_rotation_acceleration += (player_z_acceleration >> 2);
+    // Vesuri updateVelocityDamping: air ASR #4, ground ASR #1 (+ pitch from yaw on X when grounded).
+    // Classic remake always used >>4 (frozen).
+    if (AmigaPlusUsesAirGroundAngularDamping()) {
+        if (touching_road || on_chains) {
+            player_x_rotation_acceleration = overall_difference_below_road - (player_x_rotation_speed >> 1);
+            player_x_rotation_acceleration += (player_z_acceleration >> 2);
+            player_z_rotation_acceleration = front_difference_below_road - (player_z_rotation_speed >> 1);
+        } else {
+            player_x_rotation_acceleration = overall_difference_below_road - (player_x_rotation_speed >> 4);
+            player_z_rotation_acceleration = front_difference_below_road - (player_z_rotation_speed >> 4);
+        }
+    } else {
+        player_x_rotation_acceleration = overall_difference_below_road - (player_x_rotation_speed >> 4);
+        if (touching_road) {
+            player_x_rotation_acceleration += (player_z_acceleration >> 2);
+        }
+        player_z_rotation_acceleration = front_difference_below_road - (player_z_rotation_speed >> 4);
     }
-
-    player_z_rotation_acceleration = front_difference_below_road - (player_z_rotation_speed >> 4);
-
-#ifdef HIGHER_FRAME_RATE
-    // 08/11/1998 - allow four times the frame rate by dividing accelerations by four
-    player_x_rotation_acceleration++;
-    player_z_rotation_acceleration++;
-    player_x_rotation_acceleration >>= 1;
-    player_z_rotation_acceleration >>= 1;
-#endif
     return;
 }
 
@@ -3131,7 +3245,7 @@ static void UpdatePlayersPosition(void) {
     player_x += speed;
 
     speed = ((player_world_y_speed * REDUCTION) >> 8);
-    speed <<= 7; // not sure why this is different
+    speed <<= 7; // Amiga updateWorldPosition: asl.l #7 for Y vs asl.l #6 for X/Z
     speed = DistributeStepValueWithScale(speed, g_physicsStepScale, &player_y_position_step_remainder);
     player_y += speed;
 

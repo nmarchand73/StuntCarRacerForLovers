@@ -18,6 +18,9 @@ set(SCR_SOURCES
   src/Car.cpp
   src/Car_Behaviour.cpp
   src/Opponent_Behaviour.cpp
+  src/PhysicsConfig.cpp
+  src/SpeedFeel.cpp
+  src/MenuBrand.cpp
   src/platform_sdl_gl.cpp
   src/sound_sdl.cpp
   src/StuntCarRacer.cpp
@@ -97,6 +100,8 @@ if(EMSCRIPTEN)
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Sounds@/data/Sounds"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Bitmap@/data/Bitmap"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/DejaVuSans-Bold.ttf@/data/DejaVuSans-Bold.ttf"
+      "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Oswald-Bold.ttf@/data/Oswald-Bold.ttf"
+      "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/GreatVibes-Regular.ttf@/data/GreatVibes-Regular.ttf"
       "SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/package/template.html"
     )
     add_custom_command(TARGET stuntcarracer POST_BUILD

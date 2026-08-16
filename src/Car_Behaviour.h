@@ -25,8 +25,9 @@
 
 #define AMIGA_PAL_HZ (3546895)
 
-#define REDUCTION 238 // (238/256)
-#define INCREASE 276  // (276/256) - kept for opponent physics; player uses PhysicsConfig.h
+#define REDUCTION 238 // (238/256) — Amiga $EE
+/* INCREASE was Amiga calculate.difference spring ($0114=276). Opponent now uses GetActive*Spring(). */
+#define INCREASE 276
 
 #include "PhysicsConfig.h"
 

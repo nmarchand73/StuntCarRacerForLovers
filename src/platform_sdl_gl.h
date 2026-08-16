@@ -392,7 +392,7 @@ class GpuTexture {
     }
     void LoadTexture(const char* name);
     void Bind() { glBindTexture(GL_TEXTURE_2D, texID); }
-    void UnBind() { glBindTexture(GL_TEXTURE_2D, 0); }
+    void UnBind() { /* leave texID bound; binding 0 trips Apple sampler warnings */ }
 };
 /*============================================================
 
@@ -862,6 +862,8 @@ class RenderDevice {
     HRESULT Clear(DWORD Count, const ClearRect* pRects, DWORD Flags, COLOR Color, float Z, DWORD Stencil);
     HRESULT BeginScene() { return S_OK; };
     HRESULT EndScene() { return S_OK; };
+    /** Create shaders + dummy texture early (avoids macOS unloadable-sampler warning). */
+    bool WarmupGL() { return EnsureInitialized(); }
     HRESULT CreateVertexBuffer(UINT Length, DWORD Usage, DWORD FVF, PoolType Pool,
                                VertexBuffer** ppVertexBuffer, HANDLE* pSharedHandle);
     HRESULT SetStreamSource(UINT StreamNumber, VertexBuffer* pStreamData, UINT OffsetInBytes, UINT Stride);
@@ -890,6 +892,7 @@ class RenderDevice {
     int mSrcBlend;
     int mDstBlend;
     GLuint mShaderProgram;
+    GLuint mDummyTexture; /* complete 1x1 — Apple GL rejects sampling texture 0 */
     GLuint mDynamicVbo;
     GLint mUniformMvp;
     GLint mUniformTexture;

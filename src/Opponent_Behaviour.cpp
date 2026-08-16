@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <cmath>
 #include <cstring>
+#include <cwchar>
 
 #include "StuntCarRacer.h"
 #include "Opponent_Behaviour.h"
@@ -295,6 +296,63 @@ static long opponents_distance_step_remainder = 0;
 static long opponents_lateral_step_remainder = 0;
 static long opp_y_speed_step_remainder[NUM_OPP_WHEEL_POSITIONS] = {0, 0, 0};
 static long opp_actual_height_step_remainder[NUM_OPP_WHEEL_POSITIONS] = {0, 0, 0};
+
+/* Multi-instance opponent pack */
+static long g_spOpponentCount = 1;
+static long g_activeOpponentInstance = 0;
+static bool g_opponentInstanceInitialised[MAX_SP_OPPONENTS] = {false, false, false, false};
+
+struct OpponentInstanceState {
+    long opponentsID;
+    long opponents_current_piece;
+    long opponents_distance_into_section;
+    long opponents_road_x_position;
+    COORD_3D opp_rear_left_road_pos;
+    COORD_3D opp_rear_right_road_pos;
+    long opp_front_road_pos_y;
+    COORD_3D opp_front_left_road_pos;
+    COORD_3D opp_front_right_road_pos;
+    COORD_3D opp_shadow_rear_left;
+    COORD_3D opp_shadow_rear_right;
+    COORD_3D opp_shadow_front_left;
+    COORD_3D opp_shadow_front_right;
+    COORD_3D prev_opp_shadow_rear_left;
+    COORD_3D prev_opp_shadow_rear_right;
+    COORD_3D prev_opp_shadow_front_left;
+    COORD_3D prev_opp_shadow_front_right;
+    bool opp_shadow_visible;
+    bool prev_opp_shadow_visible;
+    bool have_prev_opp_shadow;
+    long opp_actual_height[NUM_OPP_WHEEL_POSITIONS];
+    long opp_smallest_difference;
+    long opp_old_rear_left_difference;
+    long opp_old_rear_right_difference;
+    long opp_old_front_difference;
+    long opp_new_rear_left_difference;
+    long opp_new_rear_right_difference;
+    long opp_new_front_difference;
+    long opp_touching_road;
+    long opp_y_acceleration[NUM_OPP_WHEEL_POSITIONS];
+    long opp_y_speed[NUM_OPP_WHEEL_POSITIONS];
+    long opponents_engine_z_acceleration;
+    long opponents_max_speed;
+    long opponents_z_speed;
+    bool opponents_required_z_speed_reached;
+    long opponents_z_speed_step_remainder;
+    long opponents_distance_step_remainder;
+    long opponents_lateral_step_remainder;
+    long opp_y_speed_step_remainder[NUM_OPP_WHEEL_POSITIONS];
+    long opp_actual_height_step_remainder[NUM_OPP_WHEEL_POSITIONS];
+    bool player_close_to_opponent;
+    bool opponent_behind_player;
+    long B1bbbe[3];
+    long B1bb9d;
+    long B1bbc2;
+    long B1bbbd;
+    long opponents_suggested_road_x_position;
+};
+
+static OpponentInstanceState g_opponentInstances[MAX_SP_OPPONENTS];
 
 /*    ===================== */
 /*    Function declarations */
@@ -698,45 +756,67 @@ void OpponentBehaviour(long* x, long* y, long* z, float* x_angle, float* y_angle
     long opponent_x, opponent_y, opponent_z;
     float opponent_x_angle = 0.0f, opponent_y_angle = 0.0f, opponent_z_angle = 0.0f;
 
-    // reset opponent
+    // reset opponent (per active instance — caller iterates slots while bNewGame stays set)
     if (bNewGame) {
         EnsureOpponentSpeedValuesForTrack(TrackID);
         ResetOpponent();
 
-        opponents_current_piece = PlayersStartPiece;
-        opponents_distance_into_section = 0x400; // half way into section
-        opponents_road_x_position = 0x4c;
-        //temp        opponents_road_x_position = 0x1c;
-        //temp        opponents_road_x_position = 0xe4;
+        const long slot = g_activeOpponentInstance;
+        /* Distinct personalities across the pack */
+        opponentsID = (opponentsID + slot * 3) % NUM_OPPONENTS;
+        for (long probe = 0; probe < NUM_OPPONENTS; ++probe) {
+            bool taken = false;
+            for (long other = 0; other < slot; ++other) {
+                if (g_opponentInstanceInitialised[other] && g_opponentInstances[other].opponentsID == opponentsID) {
+                    taken = true;
+                    break;
+                }
+            }
+            if (!taken)
+                break;
+            opponentsID = (opponentsID + 1) % NUM_OPPONENTS;
+        }
 
-        // initialise.opponent.data
+        opponents_current_piece = PlayersStartPiece;
+        opponents_distance_into_section = 0x400 - slot * 0x1a0;
+        if (opponents_distance_into_section < 0x90)
+            opponents_distance_into_section = 0x90;
+        static const long kRoadX[MAX_SP_OPPONENTS] = {0x4c, 0x30, 0x68, 0x24};
+        opponents_road_x_position = kRoadX[slot % MAX_SP_OPPONENTS];
+
         CalculateOpponentsRoadWheelPositions();
-        // Position the opponent a random amount above the road
         int r = rand();
         r &= 0x7f;
         r += 0x68;
         opp_actual_height[REAR_LEFT] = opp_rear_left_road_pos.y + r;
         opp_actual_height[REAR_RIGHT] = opp_rear_right_road_pos.y + r;
         opp_actual_height[FRONT] = opp_front_road_pos_y + r;
-        // end initialise.opponent.data
 
-        // Set opponent_max_speed
         long s =
             static_cast<long>(rand()) & static_cast<long>(opp_track_speed_values[TrackID + (bSuperLeague ? 32 : 0)]);
         s += static_cast<long>(opp_track_speed_values[TrackID + 8 + (bSuperLeague ? 32 : 0)]);
+        /* Slight speed variance so the pack spreads */
+        s += (slot * 3) - 3;
+        if (s < 8)
+            s = 8;
         opponents_max_speed = s;
-        //temp        opponents_max_speed = 10;
 
-        bNewGame = FALSE;
+        g_opponentInstanceInitialised[slot] = true;
+        if (slot >= GetSinglePlayerOpponentCount() - 1)
+            bNewGame = FALSE;
     }
 
     CalculatePlayersRoadPosition();
     if (!bOpponentPaused) {
         OpponentMovement();
+        /* Only the lead AI interacts with the player (Amiga 1v1 collision path). */
+        if (g_activeOpponentInstance == 0) {
+            CalculateDistancesBetweenPlayers();
+            OpponentPlayerInteraction();
+        }
+    } else if (g_activeOpponentInstance == 0) {
         CalculateDistancesBetweenPlayers();
-        OpponentPlayerInteraction();
-    } else
-        CalculateDistancesBetweenPlayers();
+    }
 
     CalculateOpponentsRoadWheelPositions();
 
@@ -1516,10 +1596,10 @@ static void CalculateWheelDifference(long road_height, long actual_height, long 
     }
 
     amount_below_road = new_difference - *old_difference_in_out;
-    // INCREASE multiplies velocity term; scale like player spring: effective = ref * (dt_ref/dt)
-    const long increase_effective = (g_physicsStepScale > 0.0f)
-        ? (long)((float)INCREASE / g_physicsStepScale)
-        : (long)INCREASE;
+    // Active profile spring (Classic 320 or Amiga+ 276); scale like player: effective = ref / stepScale
+    const long spring_ref = GetActiveFrontSpring();
+    const long increase_effective =
+        (g_physicsStepScale > 0.0f) ? (long)((float)spring_ref / g_physicsStepScale) : spring_ref;
     amount_below_road = ((amount_below_road * increase_effective) >> 8) + new_difference;
 
     if (amount_below_road < 0)
@@ -2692,4 +2772,174 @@ void GetOpponentRoadState(long* piece, long* distanceIntoSection) {
         *piece = opponents_current_piece;
     if (distanceIntoSection)
         *distanceIntoSection = opponents_distance_into_section;
+}
+
+static OpponentInstanceState CaptureOpponentInstanceState(void) {
+    OpponentInstanceState s{};
+    s.opponentsID = opponentsID;
+    s.opponents_current_piece = opponents_current_piece;
+    s.opponents_distance_into_section = opponents_distance_into_section;
+    s.opponents_road_x_position = opponents_road_x_position;
+    s.opp_rear_left_road_pos = opp_rear_left_road_pos;
+    s.opp_rear_right_road_pos = opp_rear_right_road_pos;
+    s.opp_front_road_pos_y = opp_front_road_pos_y;
+    s.opp_front_left_road_pos = opp_front_left_road_pos;
+    s.opp_front_right_road_pos = opp_front_right_road_pos;
+    s.opp_shadow_rear_left = opp_shadow_rear_left;
+    s.opp_shadow_rear_right = opp_shadow_rear_right;
+    s.opp_shadow_front_left = opp_shadow_front_left;
+    s.opp_shadow_front_right = opp_shadow_front_right;
+    s.prev_opp_shadow_rear_left = prev_opp_shadow_rear_left;
+    s.prev_opp_shadow_rear_right = prev_opp_shadow_rear_right;
+    s.prev_opp_shadow_front_left = prev_opp_shadow_front_left;
+    s.prev_opp_shadow_front_right = prev_opp_shadow_front_right;
+    s.opp_shadow_visible = opp_shadow_visible;
+    s.prev_opp_shadow_visible = prev_opp_shadow_visible;
+    s.have_prev_opp_shadow = have_prev_opp_shadow;
+    memcpy(s.opp_actual_height, opp_actual_height, sizeof(opp_actual_height));
+    s.opp_smallest_difference = opp_smallest_difference;
+    s.opp_old_rear_left_difference = opp_old_rear_left_difference;
+    s.opp_old_rear_right_difference = opp_old_rear_right_difference;
+    s.opp_old_front_difference = opp_old_front_difference;
+    s.opp_new_rear_left_difference = opp_new_rear_left_difference;
+    s.opp_new_rear_right_difference = opp_new_rear_right_difference;
+    s.opp_new_front_difference = opp_new_front_difference;
+    s.opp_touching_road = opp_touching_road;
+    memcpy(s.opp_y_acceleration, opp_y_acceleration, sizeof(opp_y_acceleration));
+    memcpy(s.opp_y_speed, opp_y_speed, sizeof(opp_y_speed));
+    s.opponents_engine_z_acceleration = opponents_engine_z_acceleration;
+    s.opponents_max_speed = opponents_max_speed;
+    s.opponents_z_speed = opponents_z_speed;
+    s.opponents_required_z_speed_reached = opponents_required_z_speed_reached;
+    s.opponents_z_speed_step_remainder = opponents_z_speed_step_remainder;
+    s.opponents_distance_step_remainder = opponents_distance_step_remainder;
+    s.opponents_lateral_step_remainder = opponents_lateral_step_remainder;
+    memcpy(s.opp_y_speed_step_remainder, opp_y_speed_step_remainder, sizeof(opp_y_speed_step_remainder));
+    memcpy(s.opp_actual_height_step_remainder, opp_actual_height_step_remainder,
+           sizeof(opp_actual_height_step_remainder));
+    s.player_close_to_opponent = player_close_to_opponent;
+    s.opponent_behind_player = opponent_behind_player;
+    memcpy(s.B1bbbe, B1bbbe, sizeof(B1bbbe));
+    s.B1bb9d = B1bb9d;
+    s.B1bbc2 = B1bbc2;
+    s.B1bbbd = B1bbbd;
+    s.opponents_suggested_road_x_position = opponents_suggested_road_x_position;
+    return s;
+}
+
+static void ApplyOpponentInstanceState(const OpponentInstanceState& s) {
+    opponentsID = s.opponentsID;
+    opponents_current_piece = s.opponents_current_piece;
+    opponents_distance_into_section = s.opponents_distance_into_section;
+    opponents_road_x_position = s.opponents_road_x_position;
+    opp_rear_left_road_pos = s.opp_rear_left_road_pos;
+    opp_rear_right_road_pos = s.opp_rear_right_road_pos;
+    opp_front_road_pos_y = s.opp_front_road_pos_y;
+    opp_front_left_road_pos = s.opp_front_left_road_pos;
+    opp_front_right_road_pos = s.opp_front_right_road_pos;
+    opp_shadow_rear_left = s.opp_shadow_rear_left;
+    opp_shadow_rear_right = s.opp_shadow_rear_right;
+    opp_shadow_front_left = s.opp_shadow_front_left;
+    opp_shadow_front_right = s.opp_shadow_front_right;
+    prev_opp_shadow_rear_left = s.prev_opp_shadow_rear_left;
+    prev_opp_shadow_rear_right = s.prev_opp_shadow_rear_right;
+    prev_opp_shadow_front_left = s.prev_opp_shadow_front_left;
+    prev_opp_shadow_front_right = s.prev_opp_shadow_front_right;
+    opp_shadow_visible = s.opp_shadow_visible;
+    prev_opp_shadow_visible = s.prev_opp_shadow_visible;
+    have_prev_opp_shadow = s.have_prev_opp_shadow;
+    memcpy(opp_actual_height, s.opp_actual_height, sizeof(opp_actual_height));
+    opp_smallest_difference = s.opp_smallest_difference;
+    opp_old_rear_left_difference = s.opp_old_rear_left_difference;
+    opp_old_rear_right_difference = s.opp_old_rear_right_difference;
+    opp_old_front_difference = s.opp_old_front_difference;
+    opp_new_rear_left_difference = s.opp_new_rear_left_difference;
+    opp_new_rear_right_difference = s.opp_new_rear_right_difference;
+    opp_new_front_difference = s.opp_new_front_difference;
+    opp_touching_road = s.opp_touching_road;
+    memcpy(opp_y_acceleration, s.opp_y_acceleration, sizeof(opp_y_acceleration));
+    memcpy(opp_y_speed, s.opp_y_speed, sizeof(opp_y_speed));
+    opponents_engine_z_acceleration = s.opponents_engine_z_acceleration;
+    opponents_max_speed = s.opponents_max_speed;
+    opponents_z_speed = s.opponents_z_speed;
+    opponents_required_z_speed_reached = s.opponents_required_z_speed_reached;
+    opponents_z_speed_step_remainder = s.opponents_z_speed_step_remainder;
+    opponents_distance_step_remainder = s.opponents_distance_step_remainder;
+    opponents_lateral_step_remainder = s.opponents_lateral_step_remainder;
+    memcpy(opp_y_speed_step_remainder, s.opp_y_speed_step_remainder, sizeof(opp_y_speed_step_remainder));
+    memcpy(opp_actual_height_step_remainder, s.opp_actual_height_step_remainder,
+           sizeof(opp_actual_height_step_remainder));
+    player_close_to_opponent = s.player_close_to_opponent;
+    opponent_behind_player = s.opponent_behind_player;
+    memcpy(B1bbbe, s.B1bbbe, sizeof(B1bbbe));
+    B1bb9d = s.B1bb9d;
+    B1bbc2 = s.B1bbc2;
+    B1bbbd = s.B1bbbd;
+    opponents_suggested_road_x_position = s.opponents_suggested_road_x_position;
+}
+
+static long ClampOpponentInstance(long instanceIndex) {
+    if (instanceIndex < 0)
+        return 0;
+    if (instanceIndex >= MAX_SP_OPPONENTS)
+        return MAX_SP_OPPONENTS - 1;
+    return instanceIndex;
+}
+
+void SetSinglePlayerOpponentCount(long count) {
+    if (count < 1)
+        count = 1;
+    if (count > MAX_SP_OPPONENTS)
+        count = MAX_SP_OPPONENTS;
+    g_spOpponentCount = count;
+}
+
+long GetSinglePlayerOpponentCount(void) {
+    if (g_spOpponentCount < 1)
+        return 1;
+    if (g_spOpponentCount > MAX_SP_OPPONENTS)
+        return MAX_SP_OPPONENTS;
+    return g_spOpponentCount;
+}
+
+long GetActiveOpponentInstance(void) {
+    return g_activeOpponentInstance;
+}
+
+long PushOpponentInstance(long instanceIndex) {
+    const long target = ClampOpponentInstance(instanceIndex);
+    const long previous = g_activeOpponentInstance;
+    g_opponentInstances[previous] = CaptureOpponentInstanceState();
+    g_opponentInstanceInitialised[previous] = true;
+    g_activeOpponentInstance = target;
+    if (g_opponentInstanceInitialised[target])
+        ApplyOpponentInstanceState(g_opponentInstances[target]);
+    return previous;
+}
+
+void PopOpponentInstance(long previousInstance) {
+    const long restore = ClampOpponentInstance(previousInstance);
+    g_opponentInstances[g_activeOpponentInstance] = CaptureOpponentInstanceState();
+    g_opponentInstanceInitialised[g_activeOpponentInstance] = true;
+    g_activeOpponentInstance = restore;
+    if (g_opponentInstanceInitialised[restore])
+        ApplyOpponentInstanceState(g_opponentInstances[restore]);
+}
+
+const WCHAR* GetOpponentDisplayName(long opponentsId) {
+    static WCHAR trimmed[32];
+    if (opponentsId < 0 || opponentsId >= NUM_OPPONENTS || !opponentNames[opponentsId])
+        return L"Rival";
+    wcsncpy(trimmed, opponentNames[opponentsId], 31);
+    trimmed[31] = 0;
+    size_t len = wcslen(trimmed);
+    while (len > 0 && trimmed[len - 1] == L' ')
+        trimmed[--len] = 0;
+    return trimmed;
+}
+
+void InvalidateOpponentInstances(void) {
+    for (long i = 0; i < MAX_SP_OPPONENTS; ++i)
+        g_opponentInstanceInitialised[i] = false;
+    g_activeOpponentInstance = 0;
 }
