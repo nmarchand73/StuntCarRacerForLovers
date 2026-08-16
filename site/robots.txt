@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nmarchand73.github.io/StuntCarRacerForLovers/sitemap.xml

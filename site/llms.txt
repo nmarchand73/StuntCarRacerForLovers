@@ -1,0 +1,40 @@
+# Stunt Car Racer for Lovers
+
+> Free modern remake of Geoff Crammond’s classic Amiga game *Stunt Car Racer*. Play in the browser or download for Apple Silicon Mac. Two-player races, Amiga+ physics, Enhanced Look (SCR palette).
+
+Site: https://nmarchand73.github.io/StuntCarRacerForLovers/
+Source: https://github.com/nmarchand73/StuntCarRacerForLovers
+
+## Play free online
+
+- [Browser WebAssembly build](https://nmarchand73.github.io/StuntCarRacerForLovers/play/): no install, keyboard or gamepad recommended.
+
+## Download for Mac
+
+- [Apple Silicon DMG](https://nmarchand73.github.io/StuntCarRacerForLovers/download/StuntCarRacerForLovers-macOS-arm64.dmg): drag to Applications; first launch via right-click → Open (unsigned).
+
+## What it is
+
+Stunt Car Racer for Lovers is an open remake based on [StuntCarRemake](https://github.com/ptitSeb/stuntcarremake), itself based on Geoff Crammond / MicroProse’s Amiga classic. It keeps flat-shaded SCR aesthetics and adds shared races plus optional Enhanced Look scenery.
+
+## Key features
+
+- Amiga+ physics (toggle **U**)
+- Speed Feel FOV/blur (toggle **I**)
+- Enhanced Look rails, horizon, clouds, cube field (toggle **O**)
+- Two-player local + WebRTC guest/host
+- Track packs: Classic, TNT, Original, Loops
+
+## FAQ
+
+**Is it free?** Yes — browser and Mac DMG.
+
+**Is it the original Amiga ROM?** No — it is a remake.
+
+**Where is the source?** https://github.com/nmarchand73/StuntCarRacerForLovers
+
+## Optional
+
+- [Landing page HTML](https://nmarchand73.github.io/StuntCarRacerForLovers/)
+- [README on GitHub](https://github.com/nmarchand73/StuntCarRacerForLovers/blob/master/README.md)
+- [Upstream remake](https://github.com/ptitSeb/stuntcarremake)
