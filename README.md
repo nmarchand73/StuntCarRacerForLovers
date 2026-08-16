@@ -105,6 +105,7 @@ Turn it on for a lived-in Crammond arena. Turn it off for the classic remake pre
 | <kbd>I</kbd> | Speed feel | `SCR_SPEED_FEEL=0\|1` | On |
 | <kbd>O</kbd> | Enhanced Look | `SCR_AESTHETICS=0\|1` | On |
 | <kbd>P</kbd> | Pause | — | — |
+| <kbd>F11</kbd> / <kbd>⌘↩</kbd> / <kbd>Alt+Enter</kbd> | Toggle fullscreen | — | — |
 | <kbd>F4</kbd> | Cycle scenery | — | — |
 
 ### Track preview

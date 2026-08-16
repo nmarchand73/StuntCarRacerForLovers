@@ -327,6 +327,9 @@ static long render_backdrop_viewpoint_z_angle = 0;
 
 static void ResetControlSamplingWindow(void);
 static void ApplyWindowLayout(int windowWidth, int windowHeight, bool logLayout);
+#ifdef USE_SDL2
+static void ToggleDesktopFullscreen(void);
+#endif
 static void RefreshCombinedInput(void);
 static void InitialiseBoostStartStateForRace(long reserve);
 static void DrawCenteredTextLine(TextHelper& txtHelper, const std::wstring& line, int y);
@@ -2812,7 +2815,8 @@ bool process_events() {
                     break;
                 }
 #ifdef USE_SDL2
-            if ((GameMode == TRACK_PREVIEW) && bMultiplayerMode && (keyPress == SDLK_RETURN)) {
+            if ((GameMode == TRACK_PREVIEW) && bMultiplayerMode && (keyPress == SDLK_RETURN) &&
+                (event.key.keysym.mod & (KMOD_GUI | KMOD_ALT)) == 0) {
                 g_pendingMultiplayerStarterIsKeyboard = true;
                 g_pendingMultiplayerStarterInstanceId = -1;
             }
@@ -2837,6 +2841,22 @@ bool process_events() {
             case SDLK_F5:
                 bShowStats = !bShowStats;
                 break;
+
+#ifdef USE_SDL2
+            case SDLK_F11:
+                if (!event.key.repeat)
+                    ToggleDesktopFullscreen();
+                keyPress = '\0';
+                break;
+
+            case SDLK_RETURN:
+            case SDLK_KP_ENTER:
+                if (!event.key.repeat && (event.key.keysym.mod & (KMOD_GUI | KMOD_ALT))) {
+                    ToggleDesktopFullscreen();
+                    keyPress = '\0';
+                }
+                break;
+#endif
 
             case SDLK_u:
                 ToggleAmigaPhysicsUpgrade();
@@ -3130,6 +3150,22 @@ static void ApplyWindowLayout(int windowWidth, int windowHeight, bool logLayout)
                screenScale, viewportW, viewportH, viewportX, viewportY);
     }
 }
+
+#ifdef USE_SDL2
+static void ToggleDesktopFullscreen(void) {
+    if (window == NULL)
+        return;
+    const Uint32 flags = SDL_GetWindowFlags(window);
+    const bool isFullscreen = (flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
+    if (SDL_SetWindowFullscreen(window, isFullscreen ? 0u : SDL_WINDOW_FULLSCREEN_DESKTOP) != 0) {
+        printf("Fullscreen toggle failed: %s\n", SDL_GetError());
+        return;
+    }
+    int w = 0, h = 0;
+    SDL_GetWindowSize(window, &w, &h);
+    ApplyWindowLayout(w, h, false);
+}
+#endif
 
 static void RenderCurrentFrame(double frameTime, float frameDelta) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

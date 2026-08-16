@@ -123,7 +123,7 @@ Stunt Car Racer for Lovers — macOS (Apple Silicon)
    xattr -cr "/Applications/Stunt Car Racer for Lovers.app"
    open "/Applications/Stunt Car Racer for Lovers.app"
 
-Controls: U Amiga+ physics · I Speed feel · O Enhanced Look · P Pause
+Controls: U Amiga+ physics · I Speed feel · O Enhanced Look · P Pause · F11 fullscreen
 
 Play in browser: https://nmarchand73.github.io/StuntCarRacerForLovers/play/
 EOF
