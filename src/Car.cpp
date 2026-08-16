@@ -13,6 +13,7 @@
 #include "StuntCarRacer.h"
 #include "3D_Engine.h"
 #include "Atlas.h"
+#include "AestheticsFeel.h"
 /*    ===== */
 /*    Debug */
 /*    ===== */
@@ -48,42 +49,46 @@ static void DrawHorizon( long viewpoint_y,
 /*                                                                                            */
 /*    Description:    Draw the car using the supplied viewpoint                                */
 /*    ======================================================================================= */
-static VertexBuffer* pCarVB = NULL;
+static VertexBuffer* pCarVB[5] = {NULL, NULL, NULL, NULL, NULL};
 static long numCarVertices = 0;
+static int carBuiltAesthetics = -1;
+#define CAR_LIVERY_COUNT 5
 
-static void StoreCarTriangle(COORD_3D* c1, COORD_3D* c2, COORD_3D* c3, UTVERTEX* pVertices, DWORD colour) {
-    glm::vec3 v1(static_cast<float>(c1->x), static_cast<float>(c1->y), static_cast<float>(c1->z));
-    glm::vec3 v2(static_cast<float>(c2->x), static_cast<float>(c2->y), static_cast<float>(c2->z));
-    glm::vec3 v3(static_cast<float>(c3->x), static_cast<float>(c3->y), static_cast<float>(c3->z));
+static void StoreCarTriangleUV(COORD_3D* c1, COORD_3D* c2, COORD_3D* c3, UTVERTEX* pVertices, DWORD colour, float u0,
+                               float v0, float u1, float v1, float u2, float v2) {
+    glm::vec3 p1(static_cast<float>(c1->x), static_cast<float>(c1->y), static_cast<float>(c1->z));
+    glm::vec3 p2(static_cast<float>(c2->x), static_cast<float>(c2->y), static_cast<float>(c2->z));
+    glm::vec3 p3(static_cast<float>(c3->x), static_cast<float>(c3->y), static_cast<float>(c3->z));
 
     if ((numCarVertices + 3) > MAX_VERTICES_PER_CAR) {
         MessageBox(NULL, L"Exceeded numCarVertices", L"StoreCarTriangle", MB_OK);
         return;
     }
 
-    /*
-    // Calculate surface normal: surface_normal = glm::normalize(glm::cross(v2 - v1, v3 - v2));
-    */
-
-    pVertices[numCarVertices].pos = v1;
-    //    pVertices[numCarVertices].normal = surface_normal;
+    pVertices[numCarVertices].pos = p1;
     pVertices[numCarVertices].color = colour;
+    pVertices[numCarVertices].tu = u0;
+    pVertices[numCarVertices].tv = v0;
     ++numCarVertices;
 
-    pVertices[numCarVertices].pos = v2;
-    //    pVertices[numCarVertices].normal = surface_normal;
+    pVertices[numCarVertices].pos = p2;
     pVertices[numCarVertices].color = colour;
+    pVertices[numCarVertices].tu = u1;
+    pVertices[numCarVertices].tv = v1;
     ++numCarVertices;
 
-    pVertices[numCarVertices].pos = v3;
-    //    pVertices[numCarVertices].normal = surface_normal;
+    pVertices[numCarVertices].pos = p3;
     pVertices[numCarVertices].color = colour;
+    pVertices[numCarVertices].tu = u2;
+    pVertices[numCarVertices].tv = v2;
     ++numCarVertices;
 }
 
-static void CreateCarInVB(UTVERTEX* pVertices) {
-    static long first_time = TRUE;
-    // car co-ordinates
+static void StoreCarTriangle(COORD_3D* c1, COORD_3D* c2, COORD_3D* c3, UTVERTEX* pVertices, DWORD colour) {
+    StoreCarTriangleUV(c1, c2, c3, pVertices, colour, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+static void CreateCarInVB(UTVERTEX* pVertices, int livery) {
     static COORD_3D car[16 + 8] = {//x,                y,                    z
                                    {-VCAR_WIDTH / 2, -VCAR_HEIGHT / 4, -VCAR_LENGTH / 2}, // rear left wheel
                                    {-VCAR_WIDTH / 2, 0, -VCAR_LENGTH / 2},
@@ -115,87 +120,74 @@ static void CreateCarInVB(UTVERTEX* pVertices) {
                                    {VCAR_WIDTH / 4, 0, VCAR_LENGTH / 2},
                                    {VCAR_WIDTH / 4, -VCAR_HEIGHT / 8, VCAR_LENGTH / 2}};
 
-    /*
-    if (first_time)
-        {
-        first_time = FALSE;
-        // temporarily reduce car size at runtime
-        // eventually car size will be decided and this code can be removed
-        long i, reduce = 2;
-        for (i = 0; i < (sizeof(car) / sizeof(COORD_3D)); i++)
-            {
-            car[i].x /= reduce;
-            car[i].y /= reduce;
-            car[i].z /= reduce;
-            }
-        }
-    */
+    /* Absolute SCR palette indices (same table as Amiga). */
+    struct ScrLivery {
+        int side, back, top, bottom;
+    };
+    static const ScrLivery kLiveries[CAR_LIVERY_COUNT] = {
+        {SCR_BASE_COLOUR + 12, SCR_BASE_COLOUR + 10, SCR_BASE_COLOUR + 15, SCR_BASE_COLOUR + 9}, /* classic red */
+        {22, 20, SCR_BASE_COLOUR + 15, 19}, /* Amiga “car colours 2” purple */
+        {SCR_BASE_COLOUR + 4, SCR_BASE_COLOUR + 3, SCR_BASE_COLOUR + 15, SCR_BASE_COLOUR + 13}, /* green/yellow */
+        {SCR_BASE_COLOUR + 7, SCR_BASE_COLOUR + 6, SCR_BASE_COLOUR + 15, SCR_BASE_COLOUR + 8}, /* cyan/sky */
+        {SCR_BASE_COLOUR + 21, SCR_BASE_COLOUR + 20, SCR_BASE_COLOUR + 15, SCR_BASE_COLOUR + 19}, /* super league */
+    };
+
+    const bool enhanced = IsAestheticsFeelEnabled();
+    if (livery < 0 || livery >= CAR_LIVERY_COUNT)
+        livery = 0;
 
     // rear left wheel
     DWORD colour = SCRGB(SCR_BASE_COLOUR + 0);
-    /**/
 #define vertices pVertices
-    // viewing from back
     StoreCarTriangle(&car[0], &car[1], &car[2], vertices, colour);
     StoreCarTriangle(&car[0], &car[2], &car[3], vertices, colour);
-    // viewing from front
     StoreCarTriangle(&car[3], &car[2], &car[1], vertices, colour);
     StoreCarTriangle(&car[3], &car[1], &car[0], vertices, colour);
 
-    // rear right wheel
-    // viewing from back
     StoreCarTriangle(&car[0 + 4], &car[1 + 4], &car[2 + 4], vertices, colour);
     StoreCarTriangle(&car[0 + 4], &car[2 + 4], &car[3 + 4], vertices, colour);
-    // viewing from front
     StoreCarTriangle(&car[3 + 4], &car[2 + 4], &car[1 + 4], vertices, colour);
     StoreCarTriangle(&car[3 + 4], &car[1 + 4], &car[0 + 4], vertices, colour);
-    /**/
-    /**/
-    // front left wheel
-    // viewing from back
+
     StoreCarTriangle(&car[0 + 8], &car[1 + 8], &car[2 + 8], vertices, colour);
     StoreCarTriangle(&car[0 + 8], &car[2 + 8], &car[3 + 8], vertices, colour);
-    // viewing from front
     StoreCarTriangle(&car[3 + 8], &car[2 + 8], &car[1 + 8], vertices, colour);
     StoreCarTriangle(&car[3 + 8], &car[1 + 8], &car[0 + 8], vertices, colour);
 
-    // front right wheel
-    // viewing from back
     StoreCarTriangle(&car[0 + 12], &car[1 + 12], &car[2 + 12], vertices, colour);
     StoreCarTriangle(&car[0 + 12], &car[2 + 12], &car[3 + 12], vertices, colour);
-    // viewing from front
     StoreCarTriangle(&car[3 + 12], &car[2 + 12], &car[1 + 12], vertices, colour);
     StoreCarTriangle(&car[3 + 12], &car[1 + 12], &car[0 + 12], vertices, colour);
-    /**/
 
-    // car left side
-    if (bSuperLeague)
+    if (enhanced)
+        colour = SCRGB(kLiveries[livery].side);
+    else if (bSuperLeague)
         colour = SCRGB(SCR_BASE_COLOUR + 21);
     else
         colour = SCRGB(SCR_BASE_COLOUR + 12);
     StoreCarTriangle(&car[4 + 16], &car[5 + 16], &car[1 + 16], vertices, colour);
     StoreCarTriangle(&car[4 + 16], &car[1 + 16], &car[0 + 16], vertices, colour);
-    // car right side
     StoreCarTriangle(&car[3 + 16], &car[2 + 16], &car[6 + 16], vertices, colour);
     StoreCarTriangle(&car[3 + 16], &car[6 + 16], &car[7 + 16], vertices, colour);
 
-    // car back
-    if (bSuperLeague)
+    if (enhanced)
+        colour = SCRGB(kLiveries[livery].back);
+    else if (bSuperLeague)
         colour = SCRGB(SCR_BASE_COLOUR + 20);
     else
         colour = SCRGB(SCR_BASE_COLOUR + 10);
     StoreCarTriangle(&car[0 + 16], &car[1 + 16], &car[2 + 16], vertices, colour);
     StoreCarTriangle(&car[0 + 16], &car[2 + 16], &car[3 + 16], vertices, colour);
-    // car front
     StoreCarTriangle(&car[7 + 16], &car[6 + 16], &car[5 + 16], vertices, colour);
     StoreCarTriangle(&car[7 + 16], &car[5 + 16], &car[4 + 16], vertices, colour);
 
-    // car top
-    colour = SCRGB(SCR_BASE_COLOUR + 15);
+    colour = enhanced ? SCRGB(kLiveries[livery].top) : SCRGB(SCR_BASE_COLOUR + 15);
     StoreCarTriangle(&car[1 + 16], &car[5 + 16], &car[6 + 16], vertices, colour);
     StoreCarTriangle(&car[1 + 16], &car[6 + 16], &car[2 + 16], vertices, colour);
-    // car bottom
-    if (bSuperLeague)
+
+    if (enhanced)
+        colour = SCRGB(kLiveries[livery].bottom);
+    else if (bSuperLeague)
         colour = SCRGB(SCR_BASE_COLOUR + 19);
     else
         colour = SCRGB(SCR_BASE_COLOUR + 9);
@@ -205,37 +197,55 @@ static void CreateCarInVB(UTVERTEX* pVertices) {
 }
 
 HRESULT CreateCarVertexBuffer(RenderDevice* pDevice) {
-    if (pCarVB == NULL) {
+    FreeCarVertexBuffer();
+    const int count = IsAestheticsFeelEnabled() ? CAR_LIVERY_COUNT : 1;
+    for (int li = 0; li < count; ++li) {
         if (FAILED(pDevice->CreateVertexBuffer(MAX_VERTICES_PER_CAR * sizeof(UTVERTEX), VB_USAGE_WRITEONLY,
-                                                  FVF_UTVERTEX, POOL_DEFAULT, &pCarVB, NULL))) {
+                                               FVF_UTVERTEX, POOL_DEFAULT, &pCarVB[li], NULL))) {
             OutputDebugStringW(L"ERROR: Failed to create car vertex buffer\n");
             return E_FAIL;
         }
+        UTVERTEX* pVertices;
+        if (FAILED(pCarVB[li]->Lock(0, 0, (void**)&pVertices, 0))) {
+            OutputDebugStringW(L"ERROR: Failed to lock car vertex buffer\n");
+            return E_FAIL;
+        }
+        numCarVertices = 0;
+        CreateCarInVB(pVertices, li);
+        pCarVB[li]->Unlock();
     }
-
-    UTVERTEX* pVertices;
-    if (FAILED(pCarVB->Lock(0, 0, (void**)&pVertices, 0))) {
-        OutputDebugStringW(L"ERROR: Failed to lock car vertex buffer\n");
-        return E_FAIL;
-    }
-    numCarVertices = 0;
-    CreateCarInVB(pVertices);
-    pCarVB->Unlock();
+    carBuiltAesthetics = IsAestheticsFeelEnabled() ? 1 : 0;
     return S_OK;
 }
 
 void FreeCarVertexBuffer(void) {
-    if (pCarVB)
-        pCarVB->Release(), pCarVB = NULL;
+    for (int i = 0; i < CAR_LIVERY_COUNT; ++i) {
+        if (pCarVB[i])
+            pCarVB[i]->Release(), pCarVB[i] = NULL;
+    }
 }
 
-void DrawCar(RenderDevice* pDevice) {
+void DrawCar(RenderDevice* pDevice) { DrawCar(pDevice, 0); }
+
+void DrawCar(RenderDevice* pDevice, int livery) {
+    if (carBuiltAesthetics != (IsAestheticsFeelEnabled() ? 1 : 0)) {
+        CreateCarVertexBuffer(pDevice);
+    }
+    if (!IsAestheticsFeelEnabled())
+        livery = 0;
+    if (livery < 0 || livery >= CAR_LIVERY_COUNT || pCarVB[livery] == NULL)
+        livery = 0;
+    if (pCarVB[livery] == NULL)
+        return;
+
     pDevice->SetRenderState(RS_ZENABLE, TRUE);
     pDevice->SetRenderState(RS_CULLMODE, CULL_CCW);
+    pDevice->SetLitMaterial(false);
+    pDevice->SetTextureStageState(0, TSS_COLOROP, TOP_DISABLE);
 
-    pDevice->SetStreamSource(0, pCarVB, 0, sizeof(UTVERTEX));
+    pDevice->SetStreamSource(0, pCarVB[livery], 0, sizeof(UTVERTEX));
     pDevice->SetFVF(FVF_UTVERTEX);
-    pDevice->DrawPrimitive(PT_TRIANGLELIST, 0, numCarVertices / 3); // 3 points per triangle
+    pDevice->DrawPrimitive(PT_TRIANGLELIST, 0, numCarVertices / 3);
 }
 
 struct TRANSFORMEDTEXVERTEX {

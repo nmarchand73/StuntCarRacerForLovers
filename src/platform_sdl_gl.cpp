@@ -4,6 +4,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include "AestheticsFeel.h"
+
 extern int wideScreen;
 
 const char* BitMapRessourceName(const char* name) {
@@ -516,6 +518,7 @@ static GLuint BuildShaderProgram() {
         "}\n";
 
     const char* fragmentSource =
+        "#extension GL_OES_standard_derivatives : enable\n"
         "precision mediump float;\n"
         "uniform sampler2D uTexture;\n"
         "uniform int uColorMode;\n"
@@ -526,6 +529,9 @@ static GLuint BuildShaderProgram() {
         "uniform vec3 uSunDirView;\n"
         "uniform vec3 uCameraPos;\n"
         "uniform vec3 uWorldUpView;\n"
+        "uniform sampler2D uNormalMap;\n"
+        "uniform int uLitEnabled;\n"
+        "uniform float uSpecStrength;\n"
         "varying vec4 vColor;\n"
         "varying vec2 vTexCoord;\n"
         "varying vec3 vViewPos;\n"
@@ -541,6 +547,28 @@ static GLuint BuildShaderProgram() {
         "  vec3 fogColor = mix(uFogSkyColor, vec3(1.0, 0.9, 0.7), pow(sunAmount, 8.0));\n"
         "  return mix(col, fogColor, fogAmount);\n"
         "}\n"
+        "vec3 applyLit(in vec3 albedo, in vec3 viewPos) {\n"
+        "  vec3 dp1 = dFdx(viewPos);\n"
+        "  vec3 dp2 = dFdy(viewPos);\n"
+        "  vec2 duv1 = dFdx(vTexCoord);\n"
+        "  vec2 duv2 = dFdy(vTexCoord);\n"
+        "  vec3 Ngeom = normalize(cross(dp1, dp2));\n"
+        "  vec3 dp2perp = cross(dp2, Ngeom);\n"
+        "  vec3 dp1perp = cross(Ngeom, dp1);\n"
+        "  vec3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x);\n"
+        "  vec3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y);\n"
+        "  mat3 TBN = mat3(T, B, Ngeom);\n"
+        "  vec3 nTex = texture2D(uNormalMap, vTexCoord).xyz * 2.0 - 1.0;\n"
+        "  float specMask = texture2D(uNormalMap, vTexCoord).a;\n"
+        "  vec3 N = normalize(TBN * nTex);\n"
+        "  vec3 L = normalize(uSunDirView);\n"
+        "  vec3 V = normalize(-viewPos);\n"
+        "  vec3 H = normalize(L + V);\n"
+        "  float diff = max(dot(N, L), 0.0);\n"
+        "  float spec = pow(max(dot(N, H), 0.0), 48.0) * uSpecStrength * specMask;\n"
+        "  vec3 ambient = albedo * 0.42;\n"
+        "  return ambient + albedo * diff * 0.75 + vec3(spec);\n"
+        "}\n"
         "void main() {\n"
         "  vec4 outColor = vec4(1.0);\n"
         "  if (uColorMode == 1) {\n"
@@ -549,6 +577,9 @@ static GLuint BuildShaderProgram() {
         "    outColor = texture2D(uTexture, vTexCoord);\n"
         "  } else if (uColorMode == 3) {\n"
         "    outColor = texture2D(uTexture, vTexCoord) * vColor;\n"
+        "  }\n"
+        "  if (uLitEnabled == 1 && uColorMode >= 2) {\n"
+        "    outColor.rgb = applyLit(outColor.rgb, vViewPos);\n"
         "  }\n"
         "  if (uFogEnabled == 1) {\n"
         "    float t = length(vViewPos);\n"
@@ -587,6 +618,9 @@ static GLuint BuildShaderProgram() {
         "uniform vec3 uSunDirView;\n"
         "uniform vec3 uCameraPos;\n"
         "uniform vec3 uWorldUpView;\n"
+        "uniform sampler2D uNormalMap;\n"
+        "uniform int uLitEnabled;\n"
+        "uniform float uSpecStrength;\n"
         "varying vec4 vColor;\n"
         "varying vec2 vTexCoord;\n"
         "varying vec3 vViewPos;\n"
@@ -602,6 +636,28 @@ static GLuint BuildShaderProgram() {
         "  vec3 fogColor = mix(uFogSkyColor, vec3(1.0, 0.9, 0.7), pow(sunAmount, 8.0));\n"
         "  return mix(col, fogColor, fogAmount);\n"
         "}\n"
+        "vec3 applyLit(in vec3 albedo, in vec3 viewPos) {\n"
+        "  vec3 dp1 = dFdx(viewPos);\n"
+        "  vec3 dp2 = dFdy(viewPos);\n"
+        "  vec2 duv1 = dFdx(vTexCoord);\n"
+        "  vec2 duv2 = dFdy(vTexCoord);\n"
+        "  vec3 Ngeom = normalize(cross(dp1, dp2));\n"
+        "  vec3 dp2perp = cross(dp2, Ngeom);\n"
+        "  vec3 dp1perp = cross(Ngeom, dp1);\n"
+        "  vec3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x);\n"
+        "  vec3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y);\n"
+        "  mat3 TBN = mat3(T, B, Ngeom);\n"
+        "  vec3 nTex = texture2D(uNormalMap, vTexCoord).xyz * 2.0 - 1.0;\n"
+        "  float specMask = texture2D(uNormalMap, vTexCoord).a;\n"
+        "  vec3 N = normalize(TBN * nTex);\n"
+        "  vec3 L = normalize(uSunDirView);\n"
+        "  vec3 V = normalize(-viewPos);\n"
+        "  vec3 H = normalize(L + V);\n"
+        "  float diff = max(dot(N, L), 0.0);\n"
+        "  float spec = pow(max(dot(N, H), 0.0), 48.0) * uSpecStrength * specMask;\n"
+        "  vec3 ambient = albedo * 0.42;\n"
+        "  return ambient + albedo * diff * 0.75 + vec3(spec);\n"
+        "}\n"
         "void main() {\n"
         "  vec4 outColor = vec4(1.0);\n"
         "  if (uColorMode == 1) {\n"
@@ -610,6 +666,9 @@ static GLuint BuildShaderProgram() {
         "    outColor = texture2D(uTexture, vTexCoord);\n"
         "  } else if (uColorMode == 3) {\n"
         "    outColor = texture2D(uTexture, vTexCoord) * vColor;\n"
+        "  }\n"
+        "  if (uLitEnabled == 1 && uColorMode >= 2) {\n"
+        "    outColor.rgb = applyLit(outColor.rgb, vViewPos);\n"
         "  }\n"
         "  if (uFogEnabled == 1) {\n"
         "    float t = length(vViewPos);\n"
@@ -735,7 +794,8 @@ RenderDevice::RenderDevice()
       mShaderProgram(0), mDummyTexture(0), mDynamicVbo(0), mUniformMvp(-1), mUniformTexture(-1), mUniformTexMatrix(-1),
       mUniformColorMode(-1), mUniformModelView(-1), mUniformFogEnabled(-1), mUniformFogDensity(-1),
       mUniformFogHeightScale(-1), mUniformFogSkyColor(-1), mUniformSunDirView(-1), mUniformCameraPos(-1),
-      mUniformWorldUpView(-1) {
+      mUniformWorldUpView(-1), mUniformLitEnabled(-1), mUniformNormalMap(-1), mUniformSpecStrength(-1),
+      mLitEnabled(false), mSpecStrength(0.35f) {
     for (int i = 0; i < 8; i++) {
         colorop[i] = 0;
         colorarg1[i] = 0;
@@ -782,6 +842,9 @@ bool RenderDevice::EnsureInitialized() {
     mUniformSunDirView = STGL(GetUniformLocation)(mShaderProgram, "uSunDirView");
     mUniformCameraPos = STGL(GetUniformLocation)(mShaderProgram, "uCameraPos");
     mUniformWorldUpView = STGL(GetUniformLocation)(mShaderProgram, "uWorldUpView");
+    mUniformLitEnabled = STGL(GetUniformLocation)(mShaderProgram, "uLitEnabled");
+    mUniformNormalMap = STGL(GetUniformLocation)(mShaderProgram, "uNormalMap");
+    mUniformSpecStrength = STGL(GetUniformLocation)(mShaderProgram, "uSpecStrength");
 
     STGL(GenBuffers)(1, &mDynamicVbo);
     if (!mDynamicVbo) {
@@ -803,6 +866,12 @@ bool RenderDevice::EnsureInitialized() {
 
     STGL(UseProgram)(mShaderProgram);
     STGL(Uniform1i)(mUniformTexture, 0);
+    if (mUniformNormalMap >= 0)
+        STGL(Uniform1i)(mUniformNormalMap, 1);
+    if (mUniformLitEnabled >= 0)
+        STGL(Uniform1i)(mUniformLitEnabled, 0);
+    if (mUniformSpecStrength >= 0)
+        STGL(Uniform1f)(mUniformSpecStrength, 0.35f);
     if (mUniformFogDensity >= 0)
         STGL(Uniform1f)(mUniformFogDensity, FOG_DENSITY);
     if (mUniformFogHeightScale >= 0)
@@ -995,6 +1064,12 @@ HRESULT RenderDevice::DrawPrimitive(PrimitiveType PrimitiveType, UINT StartVerte
     const glm::mat4 modelView = mView * mWorld;
 
     const glm::vec3 fogSkyColor(FOG_SKY_COLOR_R, FOG_SKY_COLOR_G, FOG_SKY_COLOR_B);
+    float fogDensity = FOG_DENSITY;
+    float fogHeightScale = FOG_HEIGHT_SCALE;
+    float fogR = fogSkyColor.x, fogG = fogSkyColor.y, fogB = fogSkyColor.z;
+    fogDensity = GetAestheticsFogDensity();
+    fogHeightScale = GetAestheticsFogHeightScale();
+    GetAestheticsFogSkyColor(&fogR, &fogG, &fogB);
     const glm::mat4 invView = glm::inverse(mView);
     const glm::vec3 cameraWorldPos = glm::vec3(invView * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
     glm::vec3 worldUpView = glm::vec3(mView * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
@@ -1018,12 +1093,18 @@ HRESULT RenderDevice::DrawPrimitive(PrimitiveType PrimitiveType, UINT StartVerte
     STGL(UniformMatrix4fv)(mUniformTexMatrix, 1, GL_FALSE, glm::value_ptr(mText));
     STGL(Uniform1i)(mUniformColorMode, colorMode);
     STGL(Uniform1i)(mUniformFogEnabled, worldSpaceVertices ? 1 : 0);
-    STGL(Uniform1f)(mUniformFogDensity, FOG_DENSITY);
-    STGL(Uniform1f)(mUniformFogHeightScale, FOG_HEIGHT_SCALE);
-    STGL(Uniform3f)(mUniformFogSkyColor, fogSkyColor.x, fogSkyColor.y, fogSkyColor.z);
+    STGL(Uniform1f)(mUniformFogDensity, fogDensity);
+    STGL(Uniform1f)(mUniformFogHeightScale, fogHeightScale);
+    STGL(Uniform3f)(mUniformFogSkyColor, fogR, fogG, fogB);
     STGL(Uniform3f)(mUniformSunDirView, sunViewDir.x, sunViewDir.y, sunViewDir.z);
     STGL(Uniform3f)(mUniformCameraPos, cameraWorldPos.x, cameraWorldPos.y, cameraWorldPos.z);
     STGL(Uniform3f)(mUniformWorldUpView, worldUpView.x, worldUpView.y, worldUpView.z);
+    if (mUniformLitEnabled >= 0)
+        STGL(Uniform1i)(mUniformLitEnabled, mLitEnabled ? 1 : 0);
+    if (mUniformSpecStrength >= 0)
+        STGL(Uniform1f)(mUniformSpecStrength, mSpecStrength);
+    if (mUniformNormalMap >= 0)
+        STGL(Uniform1i)(mUniformNormalMap, 1);
 
     STGL(EnableVertexAttribArray)(ATTRIB_POSITION);
     STGL(VertexAttribPointer)(ATTRIB_POSITION, layout.positionComponents, GL_FLOAT, GL_FALSE, (GLsizei)streamStride,
@@ -1053,6 +1134,11 @@ HRESULT RenderDevice::DrawPrimitive(PrimitiveType PrimitiveType, UINT StartVerte
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
         if (bound == 0)
             glBindTexture(GL_TEXTURE_2D, mDummyTexture);
+        STGL(ActiveTexture)(GL_TEXTURE1);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+        if (bound == 0)
+            glBindTexture(GL_TEXTURE_2D, mDummyTexture);
+        STGL(ActiveTexture)(GL_TEXTURE0);
     }
 
     ApplyBlendState(hasTextureCoords);
@@ -1123,14 +1209,21 @@ HRESULT RenderDevice::SetSamplerState(DWORD Sampler, SamplerStateType Type, DWOR
 }
 
 HRESULT RenderDevice::SetTexture(DWORD Sampler, GpuTexture* pTexture) {
-    (void)Sampler;
+    STGL(ActiveTexture)(GL_TEXTURE0 + Sampler);
     if (pTexture)
         pTexture->Bind();
     else if (mDummyTexture)
         glBindTexture(GL_TEXTURE_2D, mDummyTexture);
     else
         glBindTexture(GL_TEXTURE_2D, 0);
+    if (Sampler != 0)
+        STGL(ActiveTexture)(GL_TEXTURE0);
     return S_OK;
+}
+
+void RenderDevice::SetLitMaterial(bool enabled, float specStrength) {
+    mLitEnabled = enabled;
+    mSpecStrength = specStrength;
 }
 
 HRESULT RenderDevice::Clear(DWORD Count, const ClearRect* pRects, DWORD Flags, COLOR Color, float Z,

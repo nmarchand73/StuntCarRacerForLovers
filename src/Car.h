@@ -53,6 +53,7 @@ extern HRESULT CreateCarVertexBuffer(RenderDevice* pDevice);
 extern void FreeCarVertexBuffer(void);
 
 extern void DrawCar(RenderDevice* pDevice);
+extern void DrawCar(RenderDevice* pDevice, int livery);
 
 extern HRESULT CreateCockpitVertexBuffer(RenderDevice* pDevice);
 

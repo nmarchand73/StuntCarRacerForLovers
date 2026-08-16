@@ -1,26 +1,68 @@
 # Stunt Car Racer for Lovers
 
-A fork of *StuntCarRemake* (Stunt Car Racer) with two-player support and reworked physics for uncapped frame rate.
+Geoff Crammond’s *Stunt Car Racer*, remade for modern machines — with shared races, Amiga+ physics, and an **Enhanced Look** that stays inside the original Amiga colour world.
 
-Play: https://retro-foundry.github.io/multistuntcar/
+| | |
+|---|---|
+| **Repo** | https://github.com/nmarchand73/StuntCarRacerForLovers |
+| **Play** | https://retro-foundry.github.io/multistuntcar/ |
+| **Upstream remake** | https://github.com/ptitSeb/stuntcarremake |
 
-## Current Project Layout
+```bash
+cmake -S . -B build && cmake --build build
+./build/stuntcarracer
+```
 
-- `src/` - game and platform source code
-- `data/` - runtime assets (tracks, sounds, bitmaps, font)
-- `build/` - out-of-source native build directory
-- `build-web/` - out-of-source Emscripten build directory (recommended)
+---
 
-## Build System
+## What’s new
 
-Desktop/native rendering and audio use SDL2 + OpenGL + SDL_ttf.
-Web builds use Emscripten SDL ports.
+- **Two-player** — local + web (WebRTC guest/host)
+- **Amiga+ physics** — Vesuri-tuned springs & damping closer to the Amiga feel
+- **Speed feel** — FOV punch and rim blur that scale with pace
+- **Enhanced Look (`O`)** — denser SCR world without leaving the palette:
+  - Horizon rings of brick buildings / towers
+  - Full-track yellow/red stripe panels (preview + race)
+  - Irregular rails, flags, boards, floodlights, tyre stacks, billboards
+  - Voxel “cube field” outside the circuit (trees, rocks, mesa)
+  - Living ambient: layered clouds, birds, dust, blinkers, chase drones
+  - Opponent liveries from the SCR palette
+- **Track packs** — Classic, TNT, Original, Loops
 
-## Native Build (Windows/Linux/macOS)
+Toggle Enhanced off anytime for the classic remake look. Visual bumps and wear do **not** change physics.
+
+---
+
+## Controls
+
+| Key | Action | Env override | Default |
+|-----|--------|--------------|---------|
+| **U** | Amiga+ physics | `SCR_AMIGA_PHYSICS=0\|1` | On |
+| **I** | Speed feel | `SCR_SPEED_FEEL=0\|1` | On |
+| **O** | Enhanced Look | `SCR_AESTHETICS=0\|1` | On |
+| **P** | Pause | — | — |
+| **F4** | Cycle scenery type | — | — |
+
+### Track preview
+
+| Input | Action |
+|-------|--------|
+| **← / →** | Single Player ↔ Multiplayer |
+| **↑ / ↓** (SP) | Opponent pack size **1–4** |
+| **Enter / A** | Start race |
+
+Preview footer shows physics / speed / look state (`[U]` `[I]` `[O]`).
+
+---
+
+## Build
+
+**Native (macOS / Linux / Windows)** — SDL2 + OpenGL + SDL_ttf:
 
 ```bash
 cmake -S . -B build
 cmake --build build
+./build/stuntcarracer
 ```
 
 Windows Release:
@@ -30,72 +72,86 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-## Web Build (Emscripten)
+**Web (Emscripten):**
 
 ```bash
 emcmake cmake -S . -B build-web
 cmake --build build-web
 ```
 
-## Web multiplayer
+WebRTC 2-player signaling: [webrtc/muttistuntcarsignal/README.md](webrtc/muttistuntcarsignal/README.md).
 
-The web build supports 2-player over WebRTC: one tab hosts (runs the game and streams the canvas), the other joins as guest (watches the stream and sends controls as player 2). A signaling server is required.
+---
 
-To deploy your own signaling server on **Cloudflare Workers** (Durable Objects), see **[webrtc/muttistuntcarsignal/README.md](webrtc/muttistuntcarsignal/README.md)** for setup, `wrangler` commands, and how to point the game at your worker URL.
+## Physics
 
-## TNT (YNY) Track Extraction Summary
+| Mode | Springs | Damping | Notes |
+|------|---------|---------|-------|
+| **Amiga+** (`U`) | `276` | `256` | Amiga air/ground angular damping — see `docs/physics-audit.md` |
+| **Classic** | `320` | `200` | Original remake defaults |
 
-The hidden TNT 8-track pack is extracted from the `reference/SCR-TNT` binary with `tools/extract_tnt_tracks.py`.
-
-- The script validates the source fingerprint (`sha1=f6fd44dc425e367b3ce3c6af18cf07f2d7a50d7b`) unless `--force` is used.
-- It finds the embedded `piece.data.offsets` table by signature, then decodes track data using the original Amiga `set.road.data1` flow from the disassembly.
-- Hidden raw track blocks are decoded from these starts (hex): `0x03BE, 0x04BE, 0x0563, 0x067C, 0x074F, 0x0807, 0x0926, 0x09F3`.
-- Compressed section data is expanded into the port’s standard `804`-byte track format:
-  - section count + start section
-  - `100` x/z entries
-  - `100` angle/template entries
-  - `100` left y-id entries
-  - `100` right y-id entries
-  - `100` left overall y-shifts (word values)
-  - `100` right overall y-shifts (word values)
-  - standard/super boost bytes
-- Output files are written to `data/Tracks/TNT/` in fixed order:
-  - `DizzyDescent`, `WittyWay`, `CrazyCaper`, `AmazingAdept`
-  - `JerkilyJump`, `EvillyEpisode`, `TeasingTemper`, `RatRace`
-- A manifest is written to `data/Tracks/TNT/manifest.json` with source hash, block offsets, and per-track SHA1/SHA256.
-
-## Original Track Pack
-
-The Original pack currently contains `Skyline Spiral`, generated by `tools/generate_original_tracks.py`.
-
-- Output is written to `data/Tracks/Original/SkylineSpiral.bin`.
-- The route is a 46-piece loop with orange/white side panels, an outside launch ramp, right-side stutters, elevated inner switchbacks, and a staged descent back to the start.
-- Regenerate it with:
+Parity harness:
 
 ```bash
-python tools/generate_original_tracks.py
+python3 tools/physics_parity_harness.py
 ```
 
-## Notes
+---
 
-- Original project: http://sourceforge.net/projects/stuntcarremake/
-- Forked from: https://github.com/ptitSeb/stuntcarremake
-- Some original sound-loading code came from Forsaken/ProjectX port work by chino.
+## Tracks
 
-## Physics profiles (Classic / Amiga+)
+Cycle packs from the track menu.
 
-- **Amiga+** (default): Amiga/Vesuri springs `276` (`$0114`), damping `256`, Vesuri air/ground angular damping, no remake delta-slew clamp. See `docs/physics-audit.md`.
-- **Classic**: frozen remake springs `320` / damping `200`.
-- Toggle in-game with **`U`** (`P` remains pause). Env override: `SCR_AMIGA_PHYSICS=0|1`.
-- Parity check: `python3 tools/physics_parity_harness.py`
+### Classic
 
-## Speed feel (presentation)
+The original remake circuits (Little Ramp, Big Ramp, Draw Bridge, …).
 
-- Acceleration-driven **FOV punch** + subtle **radial blur** of the 3D view (center sharp for gaps; soft rim darken). No chromatic junk.
-- Toggle with **`I`**. Env: `SCR_SPEED_FEEL=0|1`. Default **on**.
+### TNT
 
-## Track preview
+Extracted from `reference/SCR-TNT` with `tools/extract_tnt_tracks.py` → `data/Tracks/TNT/`  
+(`DizzyDescent` … `RatRace`). Use `--force` to skip fingerprint checks.
 
-- **Left / Right**: Single Player ↔ Multiplayer
-- **Up / Down** (single-player): opponent pack size **1–4** AI cars on track
-- **Enter / A**: start race
+### Original
+
+`Skyline Spiral` via `tools/generate_original_tracks.py` → `data/Tracks/Original/`.
+
+### Loops
+
+Steep spiral / banked-bowl approximations (Amiga tracks are an XZ height field — not true inverted loops):
+
+```bash
+python3 tools/generate_loops_tracks.py
+```
+
+→ `data/Tracks/Loops/` (`Helix Climb`, `Banked Bowl`, `Twin Cork`, `Sky Coil`).  
+Y-profile IDs and boost bytes stay intact so jumps remain clearable; only a gentle height lift is applied.
+
+---
+
+## Layout
+
+```
+src/          Game + platform (incl. AestheticsFeel, TrackProps)
+data/         Tracks, sounds, bitmaps, fonts
+  Bitmap/enhanced/   Optional Enhanced Look textures
+  Tracks/{TNT,Original,Loops}/
+build/        Native build
+build-web/    Emscripten build
+docs/         Physics audit
+tools/        Track extractors / generators
+```
+
+---
+
+## Design rule
+
+Enhanced Look stays in **Crammond’s SCR palette** — flat shades, dusty horizon, no photoreal asphalt / dirt / PBR. If it wouldn’t look at home next to Amiga Stunt Car Racer, it doesn’t ship.
+
+---
+
+## Credits
+
+- Original Amiga game — Geoff Crammond / MicroProse  
+- Remake base — [ptitSeb/stuntcarremake](https://github.com/ptitSeb/stuntcarremake) ([SourceForge](http://sourceforge.net/projects/stuntcarremake/))  
+- Some sound-loading code from Forsaken/ProjectX port work by chino  
+- Amiga physics reference — Vesuri framerate-unleashed disassembly

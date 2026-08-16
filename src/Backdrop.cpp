@@ -12,6 +12,7 @@
 
 #include "StuntCarRacer.h"
 #include "Backdrop.h"
+#include "AestheticsFeel.h"
 #include "3D_Engine.h"
 #include "Track.h"
 
@@ -42,9 +43,11 @@ extern FILE* out;
 /*    Static data */
 /*    =========== */
 static long current_scenery_type = MAX_SCENERY_TYPE;
+static long scenery3DBuiltType = -1;
+static int scenery3DBuiltAesthetics = -1;
+static int skyDomeBuiltAesthetics = -1;
 static VertexBuffer* pScenery3DVB = NULL;
 static long scenery3DVertexCount = 0;
-static long scenery3DBuiltType = -1;
 static VertexBuffer* pSkyDomeVB = NULL;
 static long skyDomeVertexCount = 0;
 
@@ -96,7 +99,8 @@ static void DrawSkyDome3D(RenderDevice* pDevice) {
     if (pDevice == NULL)
         return;
 
-    if ((pSkyDomeVB == NULL) || (skyDomeVertexCount <= 0)) {
+    const int wantAes = IsAestheticsFeelEnabled() ? 1 : 0;
+    if ((pSkyDomeVB == NULL) || (skyDomeVertexCount <= 0) || (skyDomeBuiltAesthetics != wantAes)) {
         if (FAILED(RebuildSkyDomeVertexBuffer(pDevice)))
             return;
     }
@@ -138,9 +142,35 @@ static HRESULT RebuildSkyDomeVertexBuffer(RenderDevice* pDevice) {
     const float world_center = static_cast<float>((NUM_TRACK_CUBES * scale) / 2);
     const float center_y = static_cast<float>(TRACK_BOTTOM_Y);
     const DWORD sky_colour = SCRGB(SKY_COLOUR);
+    const bool enhanced = IsAestheticsFeelEnabled();
     const float lower_elevation = (SKY_DOME_LOWER_ELEVATION_DEGREES * static_cast<float>(PI)) / 180.0f;
     const float upper_elevation = static_cast<float>(PI) * 0.5f;
     const float full_circle = static_cast<float>(PI) * 2.0f;
+
+    auto lerpByte = [](int a, int b, float t) -> int {
+        if (t < 0.0f)
+            t = 0.0f;
+        if (t > 1.0f)
+            t = 1.0f;
+        return static_cast<int>(a + (b - a) * t + 0.5f);
+    };
+    auto makeSkyColor = [&](float elevT) -> DWORD {
+        if (!enhanced)
+            return sky_colour;
+        /* Soft fade within SCR sky blues only (+7 → +8), not a photoreal gradient. */
+        const DWORD zenith = SCRGB(SCR_BASE_COLOUR + 8);
+        const DWORD horizon = sky_colour;
+        const int r0 = static_cast<int>((horizon >> 0) & 0xff);
+        const int g0 = static_cast<int>((horizon >> 8) & 0xff);
+        const int b0 = static_cast<int>((horizon >> 16) & 0xff);
+        const int r1 = static_cast<int>((zenith >> 0) & 0xff);
+        const int g1 = static_cast<int>((zenith >> 8) & 0xff);
+        const int b1 = static_cast<int>((zenith >> 16) & 0xff);
+        const int r = lerpByte(r0, r1, elevT * 0.65f);
+        const int g = lerpByte(g0, g1, elevT * 0.65f);
+        const int b = lerpByte(b0, b1, elevT * 0.65f);
+        return (0xFFu << 24) | (static_cast<DWORD>(b) << 16) | (static_cast<DWORD>(g) << 8) | static_cast<DWORD>(r);
+    };
 
     for (long ring = 0; ring < SKY_DOME_ELEVATION_SEGMENTS; ++ring) {
         const float t0 = static_cast<float>(ring) / static_cast<float>(SKY_DOME_ELEVATION_SEGMENTS);
@@ -151,6 +181,8 @@ static HRESULT RebuildSkyDomeVertexBuffer(RenderDevice* pDevice) {
         const float ring_radius1 = SKY_DOME_RADIUS * cosf(elevation1);
         const float y0 = center_y + (SKY_DOME_RADIUS * sinf(elevation0));
         const float y1 = center_y + (SKY_DOME_RADIUS * sinf(elevation1));
+        const DWORD col0 = makeSkyColor(t0);
+        const DWORD col1 = makeSkyColor(t1);
 
         for (long seg = 0; seg < SKY_DOME_AZIMUTH_SEGMENTS; ++seg) {
             const float a0 = full_circle * (static_cast<float>(seg) / static_cast<float>(SKY_DOME_AZIMUTH_SEGMENTS));
@@ -170,37 +202,37 @@ static HRESULT RebuildSkyDomeVertexBuffer(RenderDevice* pDevice) {
                 break;
 
             pVertices[skyDomeVertexCount].pos = glm::vec3(x00, y0, z00);
-            pVertices[skyDomeVertexCount].color = sky_colour;
+            pVertices[skyDomeVertexCount].color = col0;
             pVertices[skyDomeVertexCount].tu = 0.0f;
             pVertices[skyDomeVertexCount].tv = 0.0f;
             ++skyDomeVertexCount;
 
             pVertices[skyDomeVertexCount].pos = glm::vec3(x10, y1, z10);
-            pVertices[skyDomeVertexCount].color = sky_colour;
+            pVertices[skyDomeVertexCount].color = col1;
             pVertices[skyDomeVertexCount].tu = 0.0f;
             pVertices[skyDomeVertexCount].tv = 0.0f;
             ++skyDomeVertexCount;
 
             pVertices[skyDomeVertexCount].pos = glm::vec3(x11, y1, z11);
-            pVertices[skyDomeVertexCount].color = sky_colour;
+            pVertices[skyDomeVertexCount].color = col1;
             pVertices[skyDomeVertexCount].tu = 0.0f;
             pVertices[skyDomeVertexCount].tv = 0.0f;
             ++skyDomeVertexCount;
 
             pVertices[skyDomeVertexCount].pos = glm::vec3(x00, y0, z00);
-            pVertices[skyDomeVertexCount].color = sky_colour;
+            pVertices[skyDomeVertexCount].color = col0;
             pVertices[skyDomeVertexCount].tu = 0.0f;
             pVertices[skyDomeVertexCount].tv = 0.0f;
             ++skyDomeVertexCount;
 
             pVertices[skyDomeVertexCount].pos = glm::vec3(x11, y1, z11);
-            pVertices[skyDomeVertexCount].color = sky_colour;
+            pVertices[skyDomeVertexCount].color = col1;
             pVertices[skyDomeVertexCount].tu = 0.0f;
             pVertices[skyDomeVertexCount].tv = 0.0f;
             ++skyDomeVertexCount;
 
             pVertices[skyDomeVertexCount].pos = glm::vec3(x01, y0, z01);
-            pVertices[skyDomeVertexCount].color = sky_colour;
+            pVertices[skyDomeVertexCount].color = col0;
             pVertices[skyDomeVertexCount].tu = 0.0f;
             pVertices[skyDomeVertexCount].tv = 0.0f;
             ++skyDomeVertexCount;
@@ -208,6 +240,7 @@ static HRESULT RebuildSkyDomeVertexBuffer(RenderDevice* pDevice) {
     }
 
     pSkyDomeVB->Unlock();
+    skyDomeBuiltAesthetics = enhanced ? 1 : 0;
     return S_OK;
 }
 
@@ -224,6 +257,22 @@ void NextSceneryType(void) {
         current_scenery_type = MIN_SCENERY_TYPE;
 
     scenery3DBuiltType = -1;
+}
+
+void InvalidateBackdropAesthetics(void) {
+    skyDomeBuiltAesthetics = -1;
+    scenery3DBuiltAesthetics = -1;
+    scenery3DBuiltType = -1;
+    if (pSkyDomeVB) {
+        pSkyDomeVB->Release();
+        pSkyDomeVB = NULL;
+    }
+    skyDomeVertexCount = 0;
+    if (pScenery3DVB) {
+        pScenery3DVB->Release();
+        pScenery3DVB = NULL;
+    }
+    scenery3DVertexCount = 0;
 }
 
 /*    ======================================================================================= */
@@ -422,14 +471,17 @@ static void DrawHorizon(long viewpoint_y, long viewpoint_x_angle, long viewpoint
 /*    ======================================================================================= */
 
 #define NUM_SCENERY_OBJECTS 32
-
+#define NUM_SCENERY_OBJECTS_ENHANCED 56
 #define MAX_SCENERY_COORDS 7
 
 #define SCENERY_X_Y_SCALE_FACTOR 64 // (z of 0x00010000, divided by (4 * FOCUS))
 #define SCENERY_WORLD_RING_OFFSET 45000
+#define SCENERY_WORLD_RING_OFFSET_INNER 32000
+#define SCENERY_WORLD_RING_OFFSET_NEAR 20000
+#define SCENERY_WORLD_RING_OFFSET_CLOSE 12000
 #define SCENERY_WORLD_BASE_Y (TRACK_BOTTOM_Y - 16)
 #define SCENERY_BASE_VERTEX_DROP_PERCENT 0.0f
-#define MAX_SCENERY_3D_VERTICES 4096
+#define MAX_SCENERY_3D_VERTICES 48000
 
 typedef struct {
     COORD_3D* coords;
@@ -442,7 +494,9 @@ static void DrawScenery3D(RenderDevice* pDevice) {
     if (pDevice == NULL)
         return;
 
-    if ((pScenery3DVB == NULL) || (scenery3DBuiltType != current_scenery_type)) {
+    const int wantAes = IsAestheticsFeelEnabled() ? 1 : 0;
+    if ((pScenery3DVB == NULL) || (scenery3DBuiltType != current_scenery_type) ||
+        (scenery3DBuiltAesthetics != wantAes)) {
         if (FAILED(RebuildScenery3DVertexBuffer(pDevice)))
             return;
     }
@@ -657,91 +711,121 @@ static HRESULT RebuildScenery3DVertexBuffer(RenderDevice* pDevice) {
     const long scale = (1L << (LOG_CUBE_SIZE - LOG_PRECISION));
     const float world_center = static_cast<float>((NUM_TRACK_CUBES * scale) / 2);
     const float base_y = static_cast<float>(SCENERY_WORLD_BASE_Y);
+    const bool enhanced = IsAestheticsFeelEnabled();
+    /* Classic brick racers pack the horizon — 4 rings, denser angular slots. */
+    const long passCount = enhanced ? 4 : 1;
+    const long objCount = enhanced ? NUM_SCENERY_OBJECTS_ENHANCED : NUM_SCENERY_OBJECTS;
 
-    for (m = 0; m < NUM_SCENERY_OBJECTS; m++) {
-        // get pointer to scenery definition
-        number = scenery_numbers[m];
-        scenery = scenery_objects[number];
+    for (long pass = 0; pass < passCount; ++pass) {
+        const long ringOffset = (pass == 0)   ? SCENERY_WORLD_RING_OFFSET
+                                : (pass == 1) ? SCENERY_WORLD_RING_OFFSET_INNER
+                                : (pass == 2) ? SCENERY_WORLD_RING_OFFSET_NEAR
+                                              : SCENERY_WORLD_RING_OFFSET_CLOSE;
+        for (m = 0; m < objCount; m++) {
+            const long slot = m % NUM_SCENERY_OBJECTS;
+            /* Near/close rings bias to buildings/towers like Power Drift / Hard Drivin'. */
+            if (enhanced && pass >= 2)
+                number = building_numbers[slot];
+            else if (enhanced && pass == 1 && (m % 3) == 0)
+                number = building_numbers[slot];
+            else
+                number = scenery_numbers[slot];
+            scenery = scenery_objects[number];
 
-        // get pointer to scenery co-ordinates
-        scenery_coords = scenery->coords;
+            // get pointer to scenery co-ordinates
+            scenery_coords = scenery->coords;
 
-        // calculate number of co-ordinates
-        number = scenery->coordsSize / sizeof(COORD_3D);
+            // calculate number of co-ordinates
+            number = scenery->coordsSize / sizeof(COORD_3D);
 
-        // Extend base vertices down by 5% of object height so feet meet the ground.
-        long max_source_y = 0;
-        for (i = 0; i < number; ++i) {
-            if (scenery_coords[i].y > max_source_y)
-                max_source_y = scenery_coords[i].y;
-        }
-        float base_vertex_drop = static_cast<float>(max_source_y * SCENERY_X_Y_SCALE_FACTOR) *
-                                 SCENERY_BASE_VERTEX_DROP_PERCENT;
-        if (base_vertex_drop < 1.0f)
-            base_vertex_drop = 1.0f;
+            // Extend base vertices down by 5% of object height so feet meet the ground.
+            long max_source_y = 0;
+            for (i = 0; i < number; ++i) {
+                if (scenery_coords[i].y > max_source_y)
+                    max_source_y = scenery_coords[i].y;
+            }
+            float base_vertex_drop = static_cast<float>(max_source_y * SCENERY_X_Y_SCALE_FACTOR) *
+                                     SCENERY_BASE_VERTEX_DROP_PERCENT;
+            if (base_vertex_drop < 1.0f)
+                base_vertex_drop = 1.0f;
 
-        // calculate y angle for this scenery object around the world centre
-        position = scenery_positions[m] * 256;
-        y_angle = (-position & (MAX_ANGLE - 1));
+            // Dense angular packing around the arena.
+            if (enhanced)
+                position = ((m * 255) / (objCount > 1 ? (objCount - 1) : 1)) * 256;
+            else
+                position = scenery_positions[slot] * 256;
+            if (pass == 1)
+                position = (position + 0x1800) & (MAX_ANGLE - 1);
+            else if (pass == 2)
+                position = (position + 0x2c00) & (MAX_ANGLE - 1);
+            else if (pass == 3)
+                position = (position + 0x1000) & (MAX_ANGLE - 1);
+            if (enhanced)
+                position = (position + pass * 0x0300 + m * 0x0080) & (MAX_ANGLE - 1);
+            y_angle = (-position & (MAX_ANGLE - 1));
 
-        GetSinCos(y_angle, &sin_y, &cos_y);
+            GetSinCos(y_angle, &sin_y, &cos_y);
 
-        // rotate scenery around world centre and store world-space coords
-        for (i = 0; i < number; i++) {
-            const bool is_base_vertex = (scenery_coords[i].y == 0);
-            x = scenery_coords[i].x * SCENERY_X_Y_SCALE_FACTOR;
-            y = scenery_coords[i].y * SCENERY_X_Y_SCALE_FACTOR;
-            z = scenery_coords[i].z + SCENERY_WORLD_RING_OFFSET;
+            // rotate scenery around world centre and store world-space coords
+            for (i = 0; i < number; i++) {
+                const bool is_base_vertex = (scenery_coords[i].y == 0);
+                x = scenery_coords[i].x * SCENERY_X_Y_SCALE_FACTOR;
+                y = scenery_coords[i].y * SCENERY_X_Y_SCALE_FACTOR;
+                /* Closer rings: slightly taller buildings so they read from the track. */
+                if (enhanced && pass >= 2)
+                    y = (y * 5) / 4;
+                z = scenery_coords[i].z + ringOffset;
 
-            // rotate about y axis
-            trans_x = (x * cos_y) + (z * sin_y);
-            trans_z = (z * cos_y) - (x * sin_y);
+                // rotate about y axis
+                trans_x = (x * cos_y) + (z * sin_y);
+                trans_z = (z * cos_y) - (x * sin_y);
 
-            world_coords[i].x = world_center + static_cast<float>(trans_x >> LOG_PRECISION);
-            world_coords[i].y = base_y + static_cast<float>(y) + (is_base_vertex ? base_vertex_drop : 0.0f);
-            world_coords[i].z = world_center + static_cast<float>(trans_z >> LOG_PRECISION);
-        }
-
-        // draw scenery object
-        polygons = scenery->polygons;
-        for (i = 0; i < scenery->numPolygons; i++) {
-            colour = (BYTE)*polygons++;
-
-            sides = *polygons++;
-            if ((sides < 3) || (sides > MAX_POLY_SIDES)) {
-                polygons += sides;
-                continue;
+                world_coords[i].x = world_center + static_cast<float>(trans_x >> LOG_PRECISION);
+                world_coords[i].y = base_y + static_cast<float>(y) + (is_base_vertex ? base_vertex_drop : 0.0f);
+                world_coords[i].z = world_center + static_cast<float>(trans_z >> LOG_PRECISION);
             }
 
-            for (j = 0; j < sides; j++) {
-                polygon_offsets[j] = *polygons++;
-            }
+            // draw scenery object
+            polygons = scenery->polygons;
+            for (i = 0; i < scenery->numPolygons; i++) {
+                colour = (BYTE)*polygons++;
 
-            const DWORD poly_colour = SCRGB(SCR_BASE_COLOUR + colour);
-            for (j = 1; j < (sides - 1); ++j) {
-                if ((scenery3DVertexCount + 3) > MAX_SCENERY_3D_VERTICES)
-                    goto done;
+                sides = *polygons++;
+                if ((sides < 3) || (sides > MAX_POLY_SIDES)) {
+                    polygons += sides;
+                    continue;
+                }
 
-                offset = polygon_offsets[0];
-                pVertices[scenery3DVertexCount].pos = world_coords[offset];
-                pVertices[scenery3DVertexCount].color = poly_colour;
-                pVertices[scenery3DVertexCount].tu = 0.0f;
-                pVertices[scenery3DVertexCount].tv = 0.0f;
-                ++scenery3DVertexCount;
+                for (j = 0; j < sides; j++) {
+                    polygon_offsets[j] = *polygons++;
+                }
 
-                offset = polygon_offsets[j];
-                pVertices[scenery3DVertexCount].pos = world_coords[offset];
-                pVertices[scenery3DVertexCount].color = poly_colour;
-                pVertices[scenery3DVertexCount].tu = 0.0f;
-                pVertices[scenery3DVertexCount].tv = 0.0f;
-                ++scenery3DVertexCount;
+                const DWORD poly_colour = SCRGB(SCR_BASE_COLOUR + colour);
+                for (j = 1; j < (sides - 1); ++j) {
+                    if ((scenery3DVertexCount + 3) > MAX_SCENERY_3D_VERTICES)
+                        goto done;
 
-                offset = polygon_offsets[j + 1];
-                pVertices[scenery3DVertexCount].pos = world_coords[offset];
-                pVertices[scenery3DVertexCount].color = poly_colour;
-                pVertices[scenery3DVertexCount].tu = 0.0f;
-                pVertices[scenery3DVertexCount].tv = 0.0f;
-                ++scenery3DVertexCount;
+                    offset = polygon_offsets[0];
+                    pVertices[scenery3DVertexCount].pos = world_coords[offset];
+                    pVertices[scenery3DVertexCount].color = poly_colour;
+                    pVertices[scenery3DVertexCount].tu = 0.0f;
+                    pVertices[scenery3DVertexCount].tv = 0.0f;
+                    ++scenery3DVertexCount;
+
+                    offset = polygon_offsets[j];
+                    pVertices[scenery3DVertexCount].pos = world_coords[offset];
+                    pVertices[scenery3DVertexCount].color = poly_colour;
+                    pVertices[scenery3DVertexCount].tu = 0.0f;
+                    pVertices[scenery3DVertexCount].tv = 0.0f;
+                    ++scenery3DVertexCount;
+
+                    offset = polygon_offsets[j + 1];
+                    pVertices[scenery3DVertexCount].pos = world_coords[offset];
+                    pVertices[scenery3DVertexCount].color = poly_colour;
+                    pVertices[scenery3DVertexCount].tu = 0.0f;
+                    pVertices[scenery3DVertexCount].tv = 0.0f;
+                    ++scenery3DVertexCount;
+                }
             }
         }
     }
@@ -756,6 +840,7 @@ done:
     }
 
     scenery3DBuiltType = current_scenery_type;
+    scenery3DBuiltAesthetics = enhanced ? 1 : 0;
     return S_OK;
 }
 

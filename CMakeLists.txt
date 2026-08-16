@@ -20,6 +20,8 @@ set(SCR_SOURCES
   src/Opponent_Behaviour.cpp
   src/PhysicsConfig.cpp
   src/SpeedFeel.cpp
+  src/AestheticsFeel.cpp
+  src/TrackProps.cpp
   src/MenuBrand.cpp
   src/platform_sdl_gl.cpp
   src/sound_sdl.cpp

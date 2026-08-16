@@ -45,7 +45,8 @@ typedef enum {
     TRACK_PACK_CLASSIC = 0,
     TRACK_PACK_TNT = 1,
     TRACK_PACK_ORIGINAL = 2,
-    NUM_TRACK_PACKS = 3
+    TRACK_PACK_LOOPS = 3,
+    NUM_TRACK_PACKS = 4
 } TrackPack;
 
 /*    ===================== */

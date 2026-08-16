@@ -13,9 +13,13 @@
 #include "platform_sdl_gl.h"
 
 #include "Track.h"
+#include "AestheticsFeel.h"
+#include "Atlas.h"
 #include "StuntCarRacer.h"
 #include "3D_Engine.h"
 #include "Atlas.h"
+
+#include <cmath>
 
 /*    ===== */
 /*    Debug */
@@ -649,14 +653,16 @@ static WCHAR kClassicTrackNames[NUM_TRACKS][32] = {L"Little Ramp", L"Stepping St
 static WCHAR kTntTrackNames[NUM_TRACKS][32] = {L"Dizzy Descent", L"Witty Way",      L"Crazy Caper",   L"Amazing Adept",
                                                L"Jerkily Jump",  L"Evilly Episode", L"Teasing Temper", L"Rat Race"};
 static WCHAR kOriginalTrackNames[NUM_TRACKS][32] = {L"Skyline Spiral"};
-static const WCHAR* kTrackPackNames[NUM_TRACK_PACKS] = {L"Classic", L"TNT", L"Original"};
-static const long kTrackPackTrackCounts[NUM_TRACK_PACKS] = {NUM_TRACKS, NUM_TRACKS, 1};
+static WCHAR kLoopsTrackNames[NUM_TRACKS][32] = {L"Helix Climb", L"Banked Bowl", L"Twin Cork", L"Sky Coil"};
+static const WCHAR* kTrackPackNames[NUM_TRACK_PACKS] = {L"Classic", L"TNT", L"Original", L"Loops"};
+static const long kTrackPackTrackCounts[NUM_TRACK_PACKS] = {NUM_TRACKS, NUM_TRACKS, 1, 4};
 
 static const WCHAR* kTrackResourceNames[NUM_TRACK_PACKS][NUM_TRACKS] = {
     {L"LittleRamp", L"SteppingStones", L"HumpBack", L"BigRamp", L"SkiJump", L"DrawBridge", L"HighJump", L"RollerCoaster"},
     {L"DizzyDescent", L"WittyWay", L"CrazyCaper", L"AmazingAdept", L"JerkilyJump", L"EvillyEpisode", L"TeasingTemper",
      L"RatRace"},
     {L"SkylineSpiral"},
+    {L"HelixClimb", L"BankedBowl", L"TwinCork", L"SkyCoil"},
 };
 
 static const char* kTrackFilenames[NUM_TRACK_PACKS][NUM_TRACKS] = {
@@ -666,6 +672,8 @@ static const char* kTrackFilenames[NUM_TRACK_PACKS][NUM_TRACKS] = {
      "data/Tracks/TNT/AmazingAdept.bin", "data/Tracks/TNT/JerkilyJump.bin", "data/Tracks/TNT/EvillyEpisode.bin",
      "data/Tracks/TNT/TeasingTemper.bin", "data/Tracks/TNT/RatRace.bin"},
     {"data/Tracks/Original/SkylineSpiral.bin"},
+    {"data/Tracks/Loops/HelixClimb.bin", "data/Tracks/Loops/BankedBowl.bin", "data/Tracks/Loops/TwinCork.bin",
+     "data/Tracks/Loops/SkyCoil.bin"},
 };
 
 /*    ======================================================================================= */
@@ -681,6 +689,8 @@ WCHAR* GetTrackName(long track) {
         return kTntTrackNames[track];
     if (gTrackPack == TRACK_PACK_ORIGINAL)
         return kOriginalTrackNames[track];
+    if (gTrackPack == TRACK_PACK_LOOPS)
+        return kLoopsTrackNames[track];
     return kClassicTrackNames[track];
 }
 
@@ -742,7 +752,8 @@ long ConvertAmigaTrack(long track) {
 
     BYTE roadColour, sidesColour;
     const bool useTntColourScheme = (gTrackPack == TRACK_PACK_TNT);
-    const bool useOriginalColourScheme = (gTrackPack == TRACK_PACK_ORIGINAL);
+    const bool useOriginalColourScheme =
+        (gTrackPack == TRACK_PACK_ORIGINAL) || (gTrackPack == TRACK_PACK_LOOPS);
     if (first_time) {
         ConvertAmigaPieceData();
         first_time = FALSE;
@@ -1164,6 +1175,7 @@ static void ConvertAmigaPieceY(AMIGA_PIECE_Y* amiga, COORD_Y* dest) {
 typedef enum { LEFT_SIDE = 0, RIGHT_SIDE, ROAD, NUM_TRACK_FACES } TrackFaceType;
 
 static VertexBuffer *pTrackVB = NULL, *pShadowVB = NULL, *pGroundPlaneVB = NULL;
+static long numGroundPlaneTriangles = 2;
 static long trackVertices, trackSegments;
 static long numShadowVertices;
 static long PieceFirstVertex[NUM_TRACK_FACES][MAX_PIECES_PER_TRACK];
@@ -1236,51 +1248,110 @@ static glm::vec3 GetPieceVertex(long piece, long piece_x, long piece_y, long pie
     return (v);
 }
 
+/** Presentation-only deck undulation — continuous in world XZ so shared edges never tear. */
+static float EnhancedPresentationBumpY(const glm::vec3& v) {
+    if (!IsAestheticsFeelEnabled())
+        return 0.0f;
+    /* Smooth noise only — never hash by piece/segment (that opened holes at joins). */
+    const float n = std::sin(v.x * 0.015f) * std::cos(v.z * 0.013f) +
+                    0.35f * std::sin((v.x + v.z) * 0.028f);
+    const float region = 0.5f + 0.5f * std::sin(v.x * 0.0025f + v.z * 0.0021f);
+    const float amp = 2.0f + region * 5.0f; /* 2..7, stronger in some regions */
+    return n * amp;
+}
+
+static bool EnhancedRoadIsBumpyStretch(long piece) {
+    if (!IsAestheticsFeelEnabled())
+        return false;
+    const long m = piece % 7;
+    return (m == 2 || m == 3 || m == 5);
+}
+
+static DWORD EnhancedRoadColour(DWORD colour, long piece, long s) {
+    if (!EnhancedRoadIsBumpyStretch(piece))
+        return colour;
+    /* Alternate worn panels: pull toward SCR black / olive without leaving the palette. */
+    const DWORD worn = ((s + piece) & 1) ? SCRGB(SCR_BASE_COLOUR + 0) : SCRGB(SCR_BASE_COLOUR + 13);
+    const DWORD r0 = (colour >> 0) & 0xff, g0 = (colour >> 8) & 0xff, b0 = (colour >> 16) & 0xff;
+    const DWORD r1 = (worn >> 0) & 0xff, g1 = (worn >> 8) & 0xff, b1 = (worn >> 16) & 0xff;
+    const DWORD r = (r0 * 3 + r1) / 4;
+    const DWORD g = (g0 * 3 + g1) / 4;
+    const DWORD b = (b0 * 3 + b1) / 4;
+    return (0xFFu << 24) | (b << 16) | (g << 8) | r;
+}
+
+static DWORD EnhancedSideColour(DWORD colour, long piece, long s) {
+    if (!IsAestheticsFeelEnabled())
+        return colour;
+    const unsigned h = (unsigned)(piece * 2654435761u) ^ (unsigned)(s * 40503u);
+    const long wearIdx = (long)(h % 3);
+    DWORD worn;
+    switch (wearIdx) {
+    case 0:
+        worn = SCRGB(SCR_BASE_COLOUR + 14);
+        break;
+    case 1:
+        worn = SCRGB(SCR_BASE_COLOUR + 13);
+        break;
+    default:
+        worn = SCRGB(SCR_BASE_COLOUR + 9);
+        break;
+    }
+    const DWORD r0 = (colour >> 0) & 0xff, g0 = (colour >> 8) & 0xff, b0 = (colour >> 16) & 0xff;
+    const DWORD r1 = (worn >> 0) & 0xff, g1 = (worn >> 8) & 0xff, b1 = (worn >> 16) & 0xff;
+    /* Mild blend — keep identity of original side colour. */
+    const DWORD r = (r0 * 5 + r1) / 6;
+    const DWORD g = (g0 * 5 + g1) / 6;
+    const DWORD b = (b0 * 5 + b1) / 6;
+    return (0xFFu << 24) | (b << 16) | (g << 8) | r;
+}
+
 static void StorePieceTriangle(long piece, long piece_x, long piece_y, long piece_z, long offset1, long offset2,
                                long offset3, UTVERTEX* pVertices, DWORD colour, short txind, long s) {
-    glm::vec3 v1, v2, v3; //, edge1, edge2, surface_normal;
+    glm::vec3 v1 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset1);
+    glm::vec3 v2 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset2);
+    glm::vec3 v3 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset3);
 
-    v1 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset1);
-    v2 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset2);
-    v3 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset3);
+    /* Same continuous bump on road and sides so the deck edge stays sealed. */
+    v1.y += EnhancedPresentationBumpY(v1);
+    v2.y += EnhancedPresentationBumpY(v2);
+    v3.y += EnhancedPresentationBumpY(v3);
 
-    /*
-    // Calculate surface normal: surface_normal = glm::normalize(glm::cross(v2 - v1, v3 - v2));
-    */
+    if (txind != 0)
+        colour = EnhancedRoadColour(colour, piece, s);
+    else
+        colour = EnhancedSideColour(colour, piece, s);
 
     pVertices[trackVertices].pos = v1;
-    //    pVertices[trackVertices].normal = surface_normal;
-    pVertices[trackVertices].color = colour; //D3DCOLOR_XRGB(255,255,255);
+    pVertices[trackVertices].color = colour;
     if (txind == 1) {
-        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //1.0f;
+        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     } else if (txind == 2) {
-        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //1.0f;
+        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     }
     ++trackVertices;
 
     pVertices[trackVertices].pos = v2;
-    //    pVertices[trackVertices].normal = surface_normal;
-    pVertices[trackVertices].color = colour; //D3DCOLOR_XRGB(255,255,255);
+    pVertices[trackVertices].color = colour;
     if (txind == 1) {
-        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
+        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     } else if (txind == 2) {
-        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]]; //1.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
+        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     }
     ++trackVertices;
 
     pVertices[trackVertices].pos = v3;
-    //    pVertices[trackVertices].normal = surface_normal;
-    pVertices[trackVertices].color = colour; //D3DCOLOR_XRGB(255,255,255);
+    pVertices[trackVertices].color = colour;
     if (txind == 1) {
-        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]]; //1.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
+        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     } else if (txind == 2) {
-        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]]; //1.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //1.0f;
+        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     }
     ++trackVertices;
 }
@@ -1288,24 +1359,24 @@ static void StorePieceTriangle(long piece, long piece_x, long piece_y, long piec
 // Fetch and store the piece vertex identified by offset1 (offset2 and 3 are just used to calculate the surface normal)
 static void StorePieceVertex1(long piece, long piece_x, long piece_y, long piece_z, long offset1, long offset2,
                               long offset3, UTVERTEX* pVertices, DWORD colour, short txind, long s) {
-    glm::vec3 v1; //, v2, v3, edge1, edge2, surface_normal;
+    (void)offset2;
+    (void)offset3;
+    glm::vec3 v1 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset1);
+    v1.y += EnhancedPresentationBumpY(v1);
 
-    v1 = GetPieceVertex(piece, piece_x, piece_y, piece_z, offset1);
-    /*
-    v2 = GetPieceVertex( piece, piece_x, piece_y, piece_z, offset2 );
-    v3 = GetPieceVertex( piece, piece_x, piece_y, piece_z, offset3 );
-    // surface_normal = glm::normalize(glm::cross(v2 - v1, v3 - v2));
-    */
+    if (txind != 0)
+        colour = EnhancedRoadColour(colour, piece, s);
+    else
+        colour = EnhancedSideColour(colour, piece, s);
 
     pVertices[trackVertices].pos = v1;
-    //    pVertices[trackVertices].normal = surface_normal;
     pVertices[trackVertices].color = colour;
     if (txind == 1) {
-        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
+        pVertices[trackVertices].tu = atlas_tx1[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     } else if (txind == 2) {
-        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]]; //1.0f;
-        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]]; //0.0f;
+        pVertices[trackVertices].tu = atlas_tx2[SegmentRoadTexture[Track[piece].firstSegment + s]];
+        pVertices[trackVertices].tv = atlas_ty1[SegmentRoadTexture[Track[piece].firstSegment + s]];
     }
     ++trackVertices;
 }
@@ -1675,31 +1746,23 @@ void DrawTrack(RenderDevice* pDevice) {
     if (TrackID == NO_TRACK)
         return;
 
-    //    VALUE1 = player_current_piece;
-    //    VALUE2 = player_current_segment;
-
     pDevice->SetRenderState(RS_ZENABLE, TRUE);
     pDevice->SetRenderState(RS_CULLMODE, CULL_CCW);
 
     pDevice->SetStreamSource(0, pTrackVB, 0, sizeof(UTVERTEX));
     pDevice->SetFVF(FVF_UTVERTEX);
-    if ((GameMode == TRACK_MENU) || (GameMode == TRACK_PREVIEW)) {
-        /*
-         * Draw track without road lines
-         */
-        if (bTrackDrawMode == 0) // Use PT_TRIANGLELIST
-        {
-            pDevice->DrawPrimitive(PT_TRIANGLELIST, 0,
-                                      NumTrackSegments * 6); // 6 triangles per segment (road and two sides)
-        } else if (bTrackDrawMode == 1) // Use PT_TRIANGLESTRIP (so there are less vertices in total)
-        {
+
+    const bool previewOrMenu = (GameMode == TRACK_MENU) || (GameMode == TRACK_PREVIEW);
+    /* Classic preview: flat untextured panels. Enhanced preview: full atlas stripes. */
+    if (previewOrMenu && !IsAestheticsFeelEnabled()) {
+        if (bTrackDrawMode == 0) {
+            pDevice->DrawPrimitive(PT_TRIANGLELIST, 0, NumTrackSegments * 6);
+        } else if (bTrackDrawMode == 1) {
             pDevice->DrawPrimitive(PT_TRIANGLESTRIP, 0, trackVertices - 2);
         } else {
-            // Another (possibly faster and more efficient) option would be to draw each piece of track individually
-            // (but using DrawIndexedPrimitive / triangle strip so there are less vertices in total)
             return;
         }
-    } else //    GAME_IN_PROGRESS or GAME_OVER
+    } else // GAME_* or Enhanced preview/menu
     {
         /*
          * Draw track with road lines
@@ -1707,46 +1770,39 @@ void DrawTrack(RenderDevice* pDevice) {
         PrimitiveType primitiveType;
         long verticesPerSegment, firstTexturedSegment, lastTexturedSegment, i, count, s, v;
 
-        if (bTrackDrawMode == 0) // Use PT_TRIANGLELIST
-        {
+        if (bTrackDrawMode == 0) {
             primitiveType = PT_TRIANGLELIST;
             verticesPerSegment = 6;
-        } else if (bTrackDrawMode == 1) // Use PT_TRIANGLESTRIP (so there are less vertices in total)
-        {
+        } else if (bTrackDrawMode == 1) {
             primitiveType = PT_TRIANGLESTRIP;
             verticesPerSegment = 2;
         } else {
-            // Another (possibly faster and more efficient) option would be to draw each piece of track individually
-            // (but using DrawIndexedPrimitive / triangle strip so there are less vertices in total)
             return;
         }
 
-        /*
-         * 1) Disable texture mapping then draw left and right sides
-         */
         pDevice->SetTextureStageState(0, TSS_COLOROP, TOP_DISABLE);
-        v = PieceFirstVertex[LEFT_SIDE][0];                                // first left side vertex
-        pDevice->DrawPrimitive(primitiveType, v, NumTrackSegments * 2); // 2 side triangles per segment
-        v = PieceFirstVertex[RIGHT_SIDE][0];                               // first right side vertex
-        pDevice->DrawPrimitive(primitiveType, v, NumTrackSegments * 2); // 2 side triangles per segment
+        v = PieceFirstVertex[LEFT_SIDE][0];
+        pDevice->DrawPrimitive(primitiveType, v, NumTrackSegments * 2);
+        v = PieceFirstVertex[RIGHT_SIDE][0];
+        pDevice->DrawPrimitive(primitiveType, v, NumTrackSegments * 2);
 
-        /*
-         * 2) Draw first part of road untextured (up to where road lines begin, in region surrounding player)
-         */
-        firstTexturedSegment = lastTexturedSegment = Track[player_current_piece].firstSegment + player_current_segment;
-        firstTexturedSegment -= TEXTURED_SEGMENTS_AROUND_PLAYER;
-        lastTexturedSegment += TEXTURED_SEGMENTS_AROUND_PLAYER;
+        firstTexturedSegment = lastTexturedSegment = 0;
+        if (IsAestheticsFeelEnabled()) {
+            firstTexturedSegment = 0;
+            lastTexturedSegment = NumTrackSegments - 1;
+        } else {
+            firstTexturedSegment = lastTexturedSegment =
+                Track[player_current_piece].firstSegment + player_current_segment;
+            firstTexturedSegment -= TEXTURED_SEGMENTS_AROUND_PLAYER;
+            lastTexturedSegment += TEXTURED_SEGMENTS_AROUND_PLAYER;
+        }
 
-        v = PieceFirstVertex[ROAD][0]; // first road vertex
+        v = PieceFirstVertex[ROAD][0];
         if (firstTexturedSegment > 0) {
-            pDevice->DrawPrimitive(primitiveType, v, firstTexturedSegment * 2); // 2 road triangles per segment
+            pDevice->DrawPrimitive(primitiveType, v, firstTexturedSegment * 2);
             segmentsRendered += firstTexturedSegment;
         }
 
-        /*
-         * 3) Enable texture mapping then draw textured road region surrounding player (i.e. with road lines)
-         */
-        //        pDevice->SetTextureStageState( 0, TSS_COLOROP,   TOP_MODULATE );
         pDevice->SetTextureStageState(0, TSS_COLOROP, TOP_SELECTARG1);
         pDevice->SetTextureStageState(0, TSS_COLORARG1, TA_TEXTURE);
         pDevice->SetTextureStageState(0, TSS_COLORARG2, TA_DIFFUSE);
@@ -1756,7 +1812,6 @@ void DrawTrack(RenderDevice* pDevice) {
 
         count = lastTexturedSegment - firstTexturedSegment + 1;
 
-        // Limit first and last to track boundaries
         if (firstTexturedSegment < 0)
             firstTexturedSegment += NumTrackSegments;
 
@@ -1766,31 +1821,24 @@ void DrawTrack(RenderDevice* pDevice) {
         s = firstTexturedSegment;
         v += s * verticesPerSegment;
 
-        // Setup texture 1
         pDevice->SetTexture(0, g_pAtlas);
 
         for (i = 0; i < count; i++, s++, v += verticesPerSegment) {
             if (s == NumTrackSegments) {
                 s = 0;
-                v = PieceFirstVertex[ROAD][0]; // first road vertex
+                v = PieceFirstVertex[ROAD][0];
             }
 
-            // Setup texture 1
-            //pDevice->SetTexture( 0, g_pRoadTexture[SegmentRoadTexture[s]] );
-
-            pDevice->DrawPrimitive(primitiveType, v, 2); // 2 road triangles per segment
+            pDevice->DrawPrimitive(primitiveType, v, 2);
             segmentsRendered++;
         }
 
-        /*
-         * 4) Disable texture mapping then (optionally) draw third part of road untextured (after end of road lines)
-         */
         pDevice->SetTextureStageState(0, TSS_COLOROP, TOP_DISABLE);
+        pDevice->SetTexture(0, NULL);
 
-        // v is already set correctly from 3) above
         if (segmentsRendered < NumTrackSegments) {
             s = NumTrackSegments - segmentsRendered;
-            pDevice->DrawPrimitive(primitiveType, v, s * 2); // 2 road triangles per segment
+            pDevice->DrawPrimitive(primitiveType, v, s * 2);
         }
     }
 
@@ -1809,67 +1857,114 @@ void DrawTrack(RenderDevice* pDevice) {
 /*    ======================================================================================= */
 
 HRESULT CreateGroundPlaneVertexBuffer(RenderDevice* pDevice) {
-    if (pGroundPlaneVB == NULL) {
-        long vertices = 6;
-        if (FAILED(pDevice->CreateVertexBuffer(vertices * sizeof(UTVERTEX), VB_USAGE_WRITEONLY,
-                                                  FVF_UTVERTEX, POOL_DEFAULT, &pGroundPlaneVB, NULL))) {
-            OutputDebugStringW(L"ERROR: Failed to create ground plane vertex buffer\n");
-            return E_FAIL;
-        }
+    FreeGroundPlaneVertexBuffer();
+
+    const bool enhanced = IsAestheticsFeelEnabled();
+    /* Finer mesh in Enhanced so terrain reads as soft SCR dunes, not giant tiles. */
+    const long grid = enhanced ? 48L : 1L;
+    const long vertices = grid * grid * 6;
+
+    if (FAILED(pDevice->CreateVertexBuffer(vertices * sizeof(UTVERTEX), VB_USAGE_WRITEONLY, FVF_UTVERTEX, POOL_DEFAULT,
+                                           &pGroundPlaneVB, NULL))) {
+        OutputDebugStringW(L"ERROR: Failed to create ground plane vertex buffer\n");
+        return E_FAIL;
     }
 
     UTVERTEX* pVertices;
     if (FAILED(pGroundPlaneVB->Lock(0, 0, (void**)&pVertices, 0))) {
         OutputDebugStringW(L"ERROR: Failed to lock ground plane vertex buffer\n");
+        FreeGroundPlaneVertexBuffer();
         return E_FAIL;
     }
 
-    // Use same scale as track vertices: piece_x = cube_index << (LOG_CUBE_SIZE - LOG_PRECISION)
     const long scale = (1L << (LOG_CUBE_SIZE - LOG_PRECISION));
     const long track_extent = NUM_TRACK_CUBES * scale;
     const float half_track = static_cast<float>(track_extent) * 0.5f;
-    // Extend ground well beyond the track in all directions so it reaches the horizon
     const long horizon_mult = 8L;
     const float half = static_cast<float>(track_extent * horizon_mult) * 0.5f;
     const float min_xz = half_track - half;
     const float max_xz = half_track + half;
-    // Slightly below track bottom to avoid z-fighting with track underside
     const float ground_y = static_cast<float>(TRACK_BOTTOM_Y) - 2.0f;
-    const DWORD ground_color = SCRGB(SCR_BASE_COLOUR + 13);    // match Backdrop GROUND_COLOUR
+    const DWORD cOlive = SCRGB(SCR_BASE_COLOUR + 13);
+    const DWORD cDark = SCRGB(SCR_BASE_COLOUR + 5);
+    const DWORD cMoss = SCRGB(SCR_BASE_COLOUR + 4);
+    const DWORD cBrown = SCRGB(SCR_BASE_COLOUR + 10);
 
-    // Winding: CW when viewed from above so CULL_CCW does not discard the faces.
-    // Triangle 1
-    pVertices[0].pos = glm::vec3(min_xz, ground_y, min_xz);
-    pVertices[0].color = ground_color;
-    pVertices[0].tu = 0.0f;
-    pVertices[0].tv = 0.0f;
+    auto lerpByte = [](DWORD a, DWORD b, float t) -> DWORD {
+        if (t < 0.0f)
+            t = 0.0f;
+        if (t > 1.0f)
+            t = 1.0f;
+        return (DWORD)((1.0f - t) * (float)a + t * (float)b + 0.5f);
+    };
+    auto lerpColour = [&](DWORD a, DWORD b, float t) -> DWORD {
+        const DWORD r = lerpByte((a >> 0) & 0xff, (b >> 0) & 0xff, t);
+        const DWORD g = lerpByte((a >> 8) & 0xff, (b >> 8) & 0xff, t);
+        const DWORD bl = lerpByte((a >> 16) & 0xff, (b >> 16) & 0xff, t);
+        return (0xFFu << 24) | (bl << 16) | (g << 8) | r;
+    };
 
-    pVertices[1].pos = glm::vec3(min_xz, ground_y, max_xz);
-    pVertices[1].color = ground_color;
-    pVertices[1].tu = 0.0f;
-    pVertices[1].tv = 1.0f;
+    /* Continuous in world XZ — shared cell corners always match (no black gaps). */
+    auto groundHeight = [&](float x, float z) -> float {
+        if (!enhanced)
+            return ground_y;
+        const float dunes = std::sin(x * 0.0038f) * std::cos(z * 0.0033f);
+        const float ripples = 0.45f * std::sin((x + z) * 0.0075f) + 0.25f * std::sin((x - z) * 0.011f);
+        const float mounds = 0.35f * std::sin(x * 0.0011f + 1.7f) * std::cos(z * 0.0009f);
+        return ground_y + dunes * 6.0f + ripples * 3.0f + mounds * 8.0f;
+    };
+    auto groundColour = [&](float x, float z) -> DWORD {
+        if (!enhanced)
+            return cOlive;
+        const float t = 0.5f + 0.5f * std::sin(x * 0.0021f) * std::cos(z * 0.0019f);
+        const float u = 0.5f + 0.5f * std::sin((x - z) * 0.0024f);
+        const float v = 0.5f + 0.5f * std::sin((x + z) * 0.00135f);
+        const float patch = 0.5f + 0.5f * std::sin(x * 0.00055f) * std::sin(z * 0.00048f);
+        /* Stronger SCR olive / moss / brown patches — brick-game arena floor. */
+        const DWORD mid = lerpColour(cOlive, cMoss, t * 0.85f);
+        const DWORD warm = lerpColour(mid, cBrown, u * 0.7f);
+        const DWORD darkish = lerpColour(warm, cDark, v * 0.45f);
+        return lerpColour(darkish, cMoss, patch * 0.35f);
+    };
 
-    pVertices[2].pos = glm::vec3(max_xz, ground_y, min_xz);
-    pVertices[2].color = ground_color;
-    pVertices[2].tu = 1.0f;
-    pVertices[2].tv = 0.0f;
+    long vi = 0;
+    const float cell = (max_xz - min_xz) / static_cast<float>(grid);
 
-    // Triangle 2
-    pVertices[3].pos = glm::vec3(max_xz, ground_y, min_xz);
-    pVertices[3].color = ground_color;
-    pVertices[3].tu = 1.0f;
-    pVertices[3].tv = 0.0f;
+    for (long gz = 0; gz < grid; ++gz) {
+        for (long gx = 0; gx < grid; ++gx) {
+            const float x0 = min_xz + static_cast<float>(gx) * cell;
+            const float x1 = x0 + cell;
+            const float z0 = min_xz + static_cast<float>(gz) * cell;
+            const float z1 = z0 + cell;
 
-    pVertices[4].pos = glm::vec3(min_xz, ground_y, max_xz);
-    pVertices[4].color = ground_color;
-    pVertices[4].tu = 0.0f;
-    pVertices[4].tv = 1.0f;
+            const float y00 = groundHeight(x0, z0);
+            const float y10 = groundHeight(x1, z0);
+            const float y01 = groundHeight(x0, z1);
+            const float y11 = groundHeight(x1, z1);
+            const DWORD c00 = groundColour(x0, z0);
+            const DWORD c10 = groundColour(x1, z0);
+            const DWORD c01 = groundColour(x0, z1);
+            const DWORD c11 = groundColour(x1, z1);
 
-    pVertices[5].pos = glm::vec3(max_xz, ground_y, max_xz);
-    pVertices[5].color = ground_color;
-    pVertices[5].tu = 1.0f;
-    pVertices[5].tv = 1.0f;
+            auto put = [&](float x, float y, float z, DWORD c) {
+                pVertices[vi].pos = glm::vec3(x, y, z);
+                pVertices[vi].color = c;
+                pVertices[vi].tu = 0.0f;
+                pVertices[vi].tv = 0.0f;
+                ++vi;
+            };
 
+            /* CW from above for CULL_CCW — per-corner colours blend across the mesh. */
+            put(x0, y00, z0, c00);
+            put(x0, y01, z1, c01);
+            put(x1, y10, z0, c10);
+            put(x1, y10, z0, c10);
+            put(x0, y01, z1, c01);
+            put(x1, y11, z1, c11);
+        }
+    }
+
+    numGroundPlaneTriangles = vi / 3;
     pGroundPlaneVB->Unlock();
     return S_OK;
 }
@@ -1877,10 +1972,11 @@ HRESULT CreateGroundPlaneVertexBuffer(RenderDevice* pDevice) {
 void FreeGroundPlaneVertexBuffer(void) {
     if (pGroundPlaneVB)
         pGroundPlaneVB->Release(), pGroundPlaneVB = NULL;
+    numGroundPlaneTriangles = 0;
 }
 
 void DrawGroundPlane(RenderDevice* pDevice) {
-    if (pGroundPlaneVB == NULL)
+    if (pGroundPlaneVB == NULL || numGroundPlaneTriangles < 1)
         return;
 
     if (TrackID == NO_TRACK)
@@ -1892,8 +1988,10 @@ void DrawGroundPlane(RenderDevice* pDevice) {
     pDevice->SetStreamSource(0, pGroundPlaneVB, 0, sizeof(UTVERTEX));
     pDevice->SetFVF(FVF_UTVERTEX);
 
+    /* SCR ground is palette patches — no dirt PBR. */
+    pDevice->SetLitMaterial(false);
     pDevice->SetTextureStageState(0, TSS_COLOROP, TOP_DISABLE);
-    pDevice->DrawPrimitive(PT_TRIANGLELIST, 0, 2);
+    pDevice->DrawPrimitive(PT_TRIANGLELIST, 0, numGroundPlaneTriangles);
 }
 
 /*    ======================================================================================= */

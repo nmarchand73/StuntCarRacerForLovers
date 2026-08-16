@@ -859,6 +859,8 @@ class RenderDevice {
     HRESULT SetTextureStageState(DWORD Stage, TextureStageStateType Type, DWORD Value);
     HRESULT SetSamplerState(DWORD Sampler, SamplerStateType Type, DWORD Value);
     HRESULT SetTexture(DWORD Sampler, GpuTexture* pTexture);
+    /** When true, textured draws sample uNormalMap (unit 1) for Blinn-Phong. */
+    void SetLitMaterial(bool enabled, float specStrength = 0.35f);
     HRESULT Clear(DWORD Count, const ClearRect* pRects, DWORD Flags, COLOR Color, float Z, DWORD Stencil);
     HRESULT BeginScene() { return S_OK; };
     HRESULT EndScene() { return S_OK; };
@@ -906,6 +908,11 @@ class RenderDevice {
     GLint mUniformSunDirView;
     GLint mUniformCameraPos;
     GLint mUniformWorldUpView;
+    GLint mUniformLitEnabled;
+    GLint mUniformNormalMap;
+    GLint mUniformSpecStrength;
+    bool mLitEnabled;
+    float mSpecStrength;
 };
 
 class TextHelper {

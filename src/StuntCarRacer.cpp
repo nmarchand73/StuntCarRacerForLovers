@@ -21,6 +21,8 @@
 #include "PhysicsConfig.h"
 #include "MenuBrand.h"
 #include "SpeedFeel.h"
+#include "AestheticsFeel.h"
+#include "TrackProps.h"
 #include "wavefunctions.h"
 #include "Atlas.h"
 #include "version.h"
@@ -197,6 +199,7 @@ bool bSuperLeague = FALSE;
 static bool g_splitScreenHorizontal = true;
 static double g_physicsHudFlashUntil = 0.0;
 static double g_speedFeelHudFlashUntil = 0.0;
+static double g_aestheticsHudFlashUntil = 0.0;
 
 static bool IsSplitScreenMode(void) {
     return bMultiplayerMode || bFauxMultiplayerMode;
@@ -751,6 +754,7 @@ void LoadTextures() {
     g_pAtlas->LoadTexture("data/Bitmap/atlas.png");
     g_pCockpitAtlas->LoadTexture("data/Bitmap/atlas2.png");
     InitAtlasCoord();
+    LoadEnhancedTextures();
     GetRenderDevice()->WarmupGL();
     GetRenderDevice()->SetTexture(0, g_pAtlas);
     printf("Texture loaded\n");
@@ -768,6 +772,8 @@ void CreateBuffers(RenderDevice* pDevice) {
         printf("Error creating CarVertexBuffer\n");
     if (CreateCockpitVertexBuffer(pDevice) != S_OK)
         printf("Error creating CarVertexBuffer\n");
+    RebuildAsphaltRoadVertexBuffer(pDevice);
+    RebuildTrackProps(pDevice);
 }
 /*    ======================================================================================= */
 /*    Function:        CalcTrackMenuViewpoint                                                    */
@@ -1555,6 +1561,9 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
             return;
         }
 
+        RebuildAsphaltRoadVertexBuffer(GetRenderDevice());
+        RebuildTrackProps(GetRenderDevice());
+
         keyPress = '\0';
     }
 
@@ -1985,6 +1994,12 @@ void RenderText(double fTime) {
                << L"]";
             txtHelper.DrawFormattedTextLine(ss.str());
         }
+        {
+            std::wstringstream ss;
+            ss << L"Look: " << (IsAestheticsFeelEnabled() ? L"Enhanced" : L"Classic") << L" ["
+               << GetAestheticsFeelProfileId() << L"]";
+            txtHelper.DrawFormattedTextLine(ss.str());
+        }
 
 #if defined(DEBUG) || defined(_DEBUG)
         // Output VALUE1, VALUE, VALUE3
@@ -2009,6 +2024,12 @@ void RenderText(double fTime) {
 
     case TRACK_PREVIEW:
         HandleTrackPreview(txtHelper);
+        {
+            std::wstringstream lookSs;
+            lookSs << L"Look: " << (IsAestheticsFeelEnabled() ? L"Enhanced" : L"Classic") << L" [O]";
+            txtHelper.SetForegroundColor(glm::vec4(1.0f, 1.0f, 0.85f, 1.0f));
+            DrawCenteredTextLine(txtHelper, lookSs.str(), static_cast<int>(480.0f - 48.0f * textScale));
+        }
         txtHelper.End();
         break;
 
@@ -2049,6 +2070,11 @@ void RenderText(double fTime) {
             std::wstringstream ss;
             ss << L"Speed feel: " << (IsSpeedFeelEnabled() ? L"On" : L"Off");
             DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>((40 + 18) * textScale));
+        }
+        if (GetTimeSeconds() < g_aestheticsHudFlashUntil) {
+            std::wstringstream ss;
+            ss << L"Look: " << (IsAestheticsFeelEnabled() ? L"Enhanced" : L"Classic");
+            DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>((40 + 36) * textScale));
         }
 
         txtHelper.End();
@@ -2179,7 +2205,22 @@ static void RenderWorldGeometry(RenderDevice* pDevice, bool drawPlayer1Car, bool
     pDevice->SetTransform(TS_WORLD, &matWorldTrack);
     DrawGroundPlane(pDevice);
     DrawBackdropScenery3D(pDevice);
+    DrawAsphaltRoad(pDevice);
     DrawTrack(pDevice);
+    {
+        const bool raceOrPreview = (GameMode == GAME_IN_PROGRESS || GameMode == TRACK_PREVIEW);
+        if (raceOrPreview && IsAestheticsFeelEnabled()) {
+            const float wx = FixedPointToWorldCoord(player1_render_x);
+            const float wy = -FixedPointToWorldCoord(player1_render_y) + GetPlayerCarRenderYOffset();
+            const float wz = FixedPointToWorldCoord(player1_render_z);
+            SetTrackLifeCarAnchor(wx, wy, wz, PlayerAngleToRadians(player1_y_angle), true);
+        } else {
+            SetTrackLifeCarAnchor(0.0f, 0.0f, 0.0f, 0.0f, false);
+        }
+    }
+    UpdateTrackLife(pDevice, static_cast<float>(GetTimeSeconds()));
+    DrawTrackProps(pDevice);
+    DrawTrackLife(pDevice);
 
     switch (GameMode) {
     case TRACK_MENU:
@@ -2190,7 +2231,7 @@ static void RenderWorldGeometry(RenderDevice* pDevice, bool drawPlayer1Car, bool
             const long oppCount = ActiveSpOpponentDrawCount();
             for (long i = 0; i < oppCount; ++i) {
                 pDevice->SetTransform(TS_WORLD, (i == 0) ? &matWorldOpponentsCar : &matWorldSpOpponents[i]);
-                DrawCar(pDevice);
+                DrawCar(pDevice, GetCarLiveryIndex(static_cast<int>(i + 1)));
             }
         }
         break;
@@ -2201,12 +2242,12 @@ static void RenderWorldGeometry(RenderDevice* pDevice, bool drawPlayer1Car, bool
             const long oppCount = ActiveSpOpponentDrawCount();
             for (long i = 0; i < oppCount; ++i) {
                 pDevice->SetTransform(TS_WORLD, (i == 0) ? &matWorldOpponentsCar : &matWorldSpOpponents[i]);
-                DrawCar(pDevice);
+                DrawCar(pDevice, GetCarLiveryIndex(static_cast<int>(i + 1)));
             }
         }
         if (drawPlayer1Car) {
             pDevice->SetTransform(TS_WORLD, &matWorldCar);
-            DrawCar(pDevice);
+            DrawCar(pDevice, GetCarLiveryIndex(0));
         }
         break;
     }
@@ -2812,6 +2853,13 @@ bool process_events() {
                 keyPress = '\0';
                 break;
 
+            case SDLK_o:
+                ToggleAestheticsFeel();
+                NotifyAestheticsChanged(GetRenderDevice());
+                g_aestheticsHudFlashUntil = GetTimeSeconds() + 2.0;
+                keyPress = '\0';
+                break;
+
             case SDLK_F6:
                 bPlayerPaused = !bPlayerPaused;
                 break;
@@ -2870,12 +2918,8 @@ bool process_events() {
                 }
                 break;
 
-            case SDLK_o:
-                bPaused = FALSE;
-                break;
-
             case SDLK_p:
-                bPaused = TRUE;
+                bPaused = !bPaused;
                 break;
 
             case SDLK_z:

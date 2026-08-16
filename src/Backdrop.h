@@ -23,4 +23,7 @@ extern void DrawBackdropScenery3D(RenderDevice* pDevice);
 
 extern void NextSceneryType(void);
 
+/** Force sky/scenery VB rebuild after Enhanced Look toggle. */
+extern void InvalidateBackdropAesthetics(void);
+
 #endif /* _BACKDROP */
