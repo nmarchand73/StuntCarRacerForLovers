@@ -29,7 +29,7 @@ jobs:
             arch: x86_64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -48,7 +48,7 @@ jobs:
             ${{ matrix.arch }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mac-${{ matrix.arch }}
           path: dist/StuntCarRacerForLovers-macOS-${{ matrix.arch }}.zip
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Emscripten
         uses: emscripten-core/setup-emsdk@v15
@@ -92,7 +92,7 @@ jobs:
           ls -lh web-dist
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-play
           path: web-dist/
@@ -107,17 +107,17 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Mac zips
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: mac-*
           path: artifacts/mac
           merge-multiple: true
 
       - name: Download Web build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: web-play
           path: artifacts/web
@@ -152,13 +152,13 @@ jobs:
           ls -lh "${SITE_OUT}/play" "${SITE_OUT}/download"
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
       - name: Deploy to GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   release:
     name: Attach Mac zips to release (tags only)
@@ -167,14 +167,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Mac zips
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: mac-*
           path: artifacts/mac
           merge-multiple: true
 
       - name: Download Web build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: web-play
           path: artifacts/web
