@@ -1,4 +1,4 @@
-name: Publish Mac, Web & GitHub Pages
+name: Publish Mac Web and Pages
 
 on:
   push:
