@@ -3,14 +3,16 @@
 # Usage: package-macos-app.sh <binary> <data-dir> <out-dir> [arch-label]
 set -euo pipefail
 
-BINARY="${1:?binary path required}"
-DATA_DIR="${2:?data directory required}"
-OUT_DIR="${3:?output directory required}"
+BINARY="$(cd "$(dirname "${1}")" && pwd)/$(basename "${1}")"
+DATA_DIR="$(cd "${2}" && pwd)"
+mkdir -p "${3}"
+OUT_DIR="$(cd "${3}" && pwd)"
 ARCH_LABEL="${4:-$(uname -m)}"
 
 APP_NAME="Stunt Car Racer for Lovers"
 BUNDLE_ID="com.lovers.stuntcarracer"
 ZIP_NAME="StuntCarRacerForLovers-macOS-${ARCH_LABEL}.zip"
+ZIP_PATH="${OUT_DIR}/${ZIP_NAME}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STAGE="${OUT_DIR}/stage-${ARCH_LABEL}"
@@ -19,7 +21,6 @@ CONTENTS="${APP}/Contents"
 MACOS="${CONTENTS}/MacOS"
 RES="${CONTENTS}/Resources"
 
-mkdir -p "${OUT_DIR}"
 rm -rf "${STAGE}"
 mkdir -p "${MACOS}" "${RES}"
 
@@ -106,14 +107,14 @@ Stunt Car Racer for Lovers — macOS
 
 Controls: U Amiga+ physics · I Speed feel · O Enhanced Look · P Pause
 
-Play in browser: https://retro-foundry.github.io/multistuntcar/
+Play in browser: https://nmarchand73.github.io/StuntCarRacerForLovers/play/
 EOF
 
-rm -f "${OUT_DIR}/${ZIP_NAME}"
+rm -f "${ZIP_PATH}"
 (
   cd "${STAGE}"
-  zip -ry "${OUT_DIR}/${ZIP_NAME}" "${APP_NAME}.app" HOW-TO-OPEN.txt
+  zip -ry "${ZIP_PATH}" "${APP_NAME}.app" HOW-TO-OPEN.txt
 )
 
-echo "Packaged ${OUT_DIR}/${ZIP_NAME}"
-ls -lh "${OUT_DIR}/${ZIP_NAME}"
+echo "Packaged ${ZIP_PATH}"
+ls -lh "${ZIP_PATH}"
