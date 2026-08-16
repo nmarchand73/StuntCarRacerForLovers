@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stunt Car Racer for Lovers — Download for Mac</title>
+  <meta name="description" content="Download Stunt Car Racer for Lovers for macOS. The classic jump — shared. Amiga+ physics, Enhanced Look, two-player races.">
+  <link rel="icon" href="assets/icon.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Oswald:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #0c1018;
+      --ink-2: #161c28;
+      --horizon: #c48a5a;
+      --sky: #5599ff;
+      --cyan: #55bbff;
+      --amber: #ff7a18;
+      --rose: #dd9999;
+      --paper: #f4f0e6;
+      --muted: #9aa3b2;
+      --line: rgba(244, 240, 230, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "Source Sans 3", system-ui, sans-serif;
+      color: var(--paper);
+      background: var(--ink);
+      line-height: 1.5;
+    }
+
+    .sky {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        radial-gradient(120% 70% at 50% -10%, rgba(85, 153, 255, 0.28), transparent 55%),
+        radial-gradient(80% 50% at 80% 20%, rgba(255, 122, 24, 0.18), transparent 50%),
+        linear-gradient(180deg, #1a2740 0%, #0c1018 42%, #1a1410 100%);
+    }
+    .sky::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(
+          -12deg,
+          transparent 0 18px,
+          rgba(255, 255, 255, 0.015) 18px 19px
+        );
+      pointer-events: none;
+    }
+
+    .wrap {
+      width: min(960px, calc(100% - 2.5rem));
+      margin: 0 auto;
+    }
+
+    /* —— Hero: one composition —— */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 3.5rem 0 4rem;
+      animation: rise 0.9s ease-out both;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .brand-mark {
+      width: 88px;
+      height: 88px;
+      border-radius: 18px;
+      margin-bottom: 1.75rem;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      animation: float 5s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    .wordmark {
+      font-family: Oswald, Impact, sans-serif;
+      font-weight: 700;
+      font-size: clamp(2.4rem, 7vw, 4.4rem);
+      letter-spacing: 0.04em;
+      line-height: 0.95;
+      text-transform: uppercase;
+      margin: 0;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+    }
+    .script {
+      font-family: "Great Vibes", cursive;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      color: var(--rose);
+      margin: 0.15em 0 0.55em;
+      line-height: 1;
+      animation: scriptIn 1.1s 0.25s ease both;
+    }
+    @keyframes scriptIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .tag {
+      max-width: 28rem;
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin: 0 0 2rem;
+      border-bottom: 2px solid var(--rose);
+      padding-bottom: 0.85rem;
+      display: inline-block;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.95rem 1.45rem;
+      border-radius: 4px;
+      font-family: Oswald, sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary {
+      background: var(--amber);
+      color: #1a0c00;
+      box-shadow: 0 8px 28px rgba(255, 122, 24, 0.35);
+    }
+    .btn-primary:hover { background: #ff913d; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--paper);
+      border-color: var(--line);
+    }
+    .btn-ghost:hover {
+      border-color: var(--sky);
+      color: var(--cyan);
+    }
+
+    .meta {
+      font-size: 0.9rem;
+      color: var(--muted);
+      max-width: 36rem;
+    }
+    .meta a { color: var(--cyan); }
+    .meta strong { color: var(--paper); font-weight: 600; }
+
+    /* —— Sections —— */
+    section {
+      padding: 3.5rem 0;
+      border-top: 1px solid var(--line);
+      animation: rise 0.8s ease-out both;
+    }
+    h2 {
+      font-family: Oswald, sans-serif;
+      font-weight: 700;
+      font-size: 1.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin: 0 0 1.25rem;
+    }
+    .lead {
+      color: var(--muted);
+      max-width: 38rem;
+      margin: 0 0 1.75rem;
+      font-size: 1.05rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      padding: 1.15rem 1.2rem;
+      background: rgba(22, 28, 40, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .card h3 {
+      font-family: Oswald, sans-serif;
+      font-size: 1rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin: 0 0 0.4rem;
+      color: var(--amber);
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .keys {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-top: 1.25rem;
+    }
+    kbd {
+      font-family: Oswald, sans-serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      padding: 0.35rem 0.55rem;
+      background: var(--ink-2);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      color: var(--paper);
+    }
+    .keys span {
+      color: var(--muted);
+      font-size: 0.9rem;
+      align-self: center;
+      margin-right: 0.35rem;
+    }
+
+    .steps {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      counter-reset: step;
+    }
+    .steps li {
+      position: relative;
+      padding: 0.85rem 0 0.85rem 3rem;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .steps li:last-child { border-bottom: 0; }
+    .steps li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0.85rem;
+      width: 1.85rem;
+      height: 1.85rem;
+      display: grid;
+      place-items: center;
+      font-family: Oswald, sans-serif;
+      background: rgba(255, 122, 24, 0.15);
+      color: var(--amber);
+      border-radius: 4px;
+    }
+    .steps strong { color: var(--paper); }
+
+    footer {
+      padding: 2.5rem 0 3.5rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    footer a { color: var(--cyan); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .foot-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.75rem;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .build-stamp {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.82rem;
+      color: var(--muted);
+      opacity: 0.85;
+    }
+
+    @media (max-width: 560px) {
+      .hero { min-height: auto; padding-top: 2.5rem; }
+      .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sky" aria-hidden="true"></div>
+
+  <header class="hero wrap">
+    <img class="brand-mark" src="assets/icon.png" width="88" height="88" alt="">
+    <h1 class="wordmark">Stunt Car Racer</h1>
+    <p class="script">for Lovers</p>
+    <p class="tag">The classic jump. Shared.</p>
+
+    <div class="cta-row">
+      <a class="btn btn-primary" id="dl-primary" href="download/StuntCarRacerForLovers-macOS-arm64.zip">
+        Download for Mac
+      </a>
+      <a class="btn btn-ghost" href="https://retro-foundry.github.io/multistuntcar/">Play in browser</a>
+    </div>
+    <p class="meta" id="dl-meta">
+      Apple Silicon <strong>.app</strong> · unsigned build — right-click → Open the first time.
+      <span class="build-stamp" id="build-stamp"></span>
+    </p>
+  </header>
+
+  <section class="wrap" id="features">
+    <h2>What’s inside</h2>
+    <p class="lead">A modern remake that keeps Geoff Crammond’s dusty Amiga colour world — then layers shared races and Enhanced Look dressing on top.</p>
+    <div class="grid">
+      <article class="card">
+        <h3>Amiga+ physics</h3>
+        <p>Vesuri-tuned springs and damping for that original airtime feel.</p>
+      </article>
+      <article class="card">
+        <h3>Enhanced Look</h3>
+        <p>Horizon rings, rails, floodlights, clouds, cube field — SCR palette only.</p>
+      </article>
+      <article class="card">
+        <h3>Two-player</h3>
+        <p>Local races plus browser WebRTC guest/host when you play online.</p>
+      </article>
+      <article class="card">
+        <h3>Track packs</h3>
+        <p>Classic, TNT, Original, and Loops circuits ready from the menu.</p>
+      </article>
+    </div>
+    <div class="keys" aria-label="Presentation toggles">
+      <span>Toggles</span>
+      <kbd>U</kbd><span>Amiga+</span>
+      <kbd>I</kbd><span>Speed</span>
+      <kbd>O</kbd><span>Look</span>
+      <kbd>P</kbd><span>Pause</span>
+    </div>
+  </section>
+
+  <section class="wrap" id="install">
+    <h2>Install on Mac</h2>
+    <ol class="steps">
+      <li>Download the <strong>Apple Silicon</strong> zip (or Intel build below if you need it).</li>
+      <li>Unzip, then optionally drag the app into <strong>Applications</strong>.</li>
+      <li><strong>Right-click → Open</strong> the first time (Gatekeeper — builds are not notarized).</li>
+      <li>Race. Toggle <kbd>O</kbd> for Enhanced Look.</li>
+    </ol>
+    <div class="cta-row" style="margin-top:1.5rem">
+      <a class="btn btn-ghost" id="dl-arm" href="download/StuntCarRacerForLovers-macOS-arm64.zip">Apple Silicon</a>
+      <a class="btn btn-ghost" id="dl-intel" href="download/StuntCarRacerForLovers-macOS-x86_64.zip">Intel Mac</a>
+    </div>
+  </section>
+
+  <footer class="wrap">
+    <div class="foot-row">
+      <div>
+        <div>Stunt Car Racer for Lovers</div>
+        <div>
+          <a href="https://github.com/nmarchand73/StuntCarRacerForLovers">GitHub</a>
+          ·
+          <a href="https://github.com/ptitSeb/stuntcarremake">Upstream remake</a>
+          ·
+          <a href="https://retro-foundry.github.io/multistuntcar/">Web play</a>
+        </div>
+      </div>
+      <div>Original game — Geoff Crammond / MicroProse</div>
+    </div>
+  </footer>
+
+  <script>
+    fetch("download/latest.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (info) {
+        if (!info) return;
+        var stamp = document.getElementById("build-stamp");
+        var parts = [];
+        if (info.version) parts.push(info.version);
+        if (info.built_at) parts.push(info.built_at);
+        if (parts.length) stamp.textContent = " · " + parts.join(" · ");
+        if (info.arm64) {
+          document.getElementById("dl-primary").href = info.arm64;
+          document.getElementById("dl-arm").href = info.arm64;
+        }
+        if (info.x86_64) {
+          document.getElementById("dl-intel").href = info.x86_64;
+        }
+      })
+      .catch(function () {});
+  </script>
+</body>
+</html>

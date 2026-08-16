@@ -12,11 +12,11 @@
 </p>
 
 <p align="center">
-  <a href="https://retro-foundry.github.io/multistuntcar/"><img src="https://img.shields.io/badge/Play-in%20browser-ff7a18?style=for-the-badge" alt="Play in browser"></a>
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/"><img src="https://img.shields.io/badge/Download-Mac%20.app-ff7a18?style=for-the-badge" alt="Download for Mac"></a>
   &nbsp;
-  <a href="https://github.com/nmarchand73/StuntCarRacerForLovers"><img src="https://img.shields.io/badge/GitHub-repo-5599ff?style=for-the-badge&logo=github" alt="GitHub"></a>
+  <a href="https://retro-foundry.github.io/multistuntcar/"><img src="https://img.shields.io/badge/Play-in%20browser-5599ff?style=for-the-badge" alt="Play in browser"></a>
   &nbsp;
-  <a href="https://github.com/ptitSeb/stuntcarremake"><img src="https://img.shields.io/badge/Upstream-stuntcarremake-777755?style=for-the-badge" alt="Upstream"></a>
+  <a href="https://github.com/nmarchand73/StuntCarRacerForLovers"><img src="https://img.shields.io/badge/GitHub-repo-161c28?style=for-the-badge&logo=github" alt="GitHub"></a>
 </p>
 
 <p align="center">
@@ -29,12 +29,33 @@
 
 ## Quick start
 
+**Mac (download):** → **[nmarchand73.github.io/StuntCarRacerForLovers](https://nmarchand73.github.io/StuntCarRacerForLovers/)**  
+Apple Silicon + Intel `.app` zips, rebuilt on every push to `master`.
+
+**From source:**
+
 ```bash
 cmake -S . -B build && cmake --build build
 ./build/stuntcarracer
 ```
 
-Prefer the browser? → **[Play now](https://retro-foundry.github.io/multistuntcar/)**
+**Browser:** → **[Play now](https://retro-foundry.github.io/multistuntcar/)**
+
+### GitHub Pages / CI
+
+Pushing to `master` runs [`.github/workflows/publish-macos.yml`](.github/workflows/publish-macos.yml):
+
+1. Builds Release on `macos-14` (arm64) and `macos-13` (x86_64)
+2. Packages `Stunt Car Racer for Lovers.app` + `data/` into zips
+3. Deploys the landing page + downloads to **GitHub Pages**
+
+One-time repo setup: **Settings → Pages → Source: GitHub Actions**.
+
+Local package smoke test:
+
+```bash
+./scripts/package-macos-app.sh build/stuntcarracer data /tmp/scr-dist arm64
+```
 
 ---
 
@@ -160,6 +181,9 @@ python3 tools/generate_loops_tracks.py
 src/                 Game + platform
   AestheticsFeel.*   Enhanced Look toggle / fog
   TrackProps.*       Roadside props, cube field, living ambient
+site/                GitHub Pages landing (Mac download)
+scripts/             package-macos-app.sh
+.github/workflows/   publish-macos.yml (build + Pages)
 data/
   Bitmap/            Atlases, UI, icon
   Bitmap/enhanced/   Optional Enhanced textures
