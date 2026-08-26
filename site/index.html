@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stunt Car Racer for Lovers — Free Browser Play &amp; Mac Download</title>
-  <meta name="description" content="Play Stunt Car Racer for Lovers free in your browser, or download the Apple Silicon Mac DMG. A modern remake of Geoff Crammond’s classic Amiga stunt racing game with Amiga+ physics and Enhanced Look.">
+  <title>Stunt Car Racer for Lovers — Free Browser Play, Mac &amp; Windows Download</title>
+  <meta name="description" content="Play Stunt Car Racer for Lovers free in your browser, or download for Apple Silicon Mac or Windows PC. A modern remake of Geoff Crammond’s classic Amiga stunt racing game with Amiga+ physics and Enhanced Look.">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
   <meta name="theme-color" content="#0a1628">
   <link rel="canonical" href="https://nmarchand73.github.io/StuntCarRacerForLovers/">
@@ -14,14 +14,14 @@
   <meta property="og:site_name" content="Stunt Car Racer for Lovers">
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://nmarchand73.github.io/StuntCarRacerForLovers/">
-  <meta property="og:title" content="Stunt Car Racer for Lovers — Free Browser Play &amp; Mac DMG">
-  <meta property="og:description" content="The classic Amiga stunt racer, remade for modern machines. Play free in the browser or download for Apple Silicon Mac.">
+  <meta property="og:title" content="Stunt Car Racer for Lovers — Free Browser Play, Mac &amp; Windows">
+  <meta property="og:description" content="The classic Amiga stunt racer, remade for modern machines. Play free in the browser or download for Mac and Windows.">
   <meta property="og:image" content="https://nmarchand73.github.io/StuntCarRacerForLovers/assets/hero-gameplay.png">
   <meta property="og:image:alt" content="Stunt Car Racer for Lovers — elevated track at dusk">
 
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Stunt Car Racer for Lovers — Play Free Online">
-  <meta name="twitter:description" content="Geoff Crammond’s classic Amiga stunt racer remake. Browser play + Apple Silicon Mac DMG.">
+  <meta name="twitter:description" content="Geoff Crammond’s classic Amiga stunt racer remake. Browser play + Mac DMG + Windows ZIP.">
   <meta name="twitter:image" content="https://nmarchand73.github.io/StuntCarRacerForLovers/assets/hero-gameplay.png">
 
   <link rel="icon" href="assets/icon.png" type="image/png">
@@ -39,7 +39,7 @@
         "@id": "https://nmarchand73.github.io/StuntCarRacerForLovers/#website",
         "url": "https://nmarchand73.github.io/StuntCarRacerForLovers/",
         "name": "Stunt Car Racer for Lovers",
-        "description": "Free browser play and Apple Silicon Mac download of a modern Stunt Car Racer remake.",
+        "description": "Free browser play and Mac/Windows downloads of a modern Stunt Car Racer remake.",
         "inLanguage": "en",
         "publisher": { "@id": "https://nmarchand73.github.io/StuntCarRacerForLovers/#project" }
       },
@@ -48,7 +48,7 @@
         "@id": "https://nmarchand73.github.io/StuntCarRacerForLovers/#app",
         "name": "Stunt Car Racer for Lovers",
         "applicationCategory": "GameApplication",
-        "operatingSystem": "Web browser, macOS 11+ Apple Silicon",
+        "operatingSystem": "Web browser, macOS 11+ Apple Silicon, Windows 10+ x64",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "url": "https://nmarchand73.github.io/StuntCarRacerForLovers/",
         "downloadUrl": "https://nmarchand73.github.io/StuntCarRacerForLovers/download/StuntCarRacerForLovers-macOS-arm64.dmg",
@@ -83,6 +83,14 @@
             "acceptedAnswer": {
               "@type": "Answer",
               "text": "Download the Apple Silicon DMG, drag the app to Applications, then run Fix macOS Gatekeeper.command or use System Settings → Privacy & Security → Open Anyway."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I install it on Windows?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Download the Windows ZIP, extract it, open the Stunt Car Racer for Lovers folder, and run stuntcarracer.exe. If SmartScreen appears, choose More info then Run anyway."
             }
           },
           {
@@ -383,6 +391,34 @@
       font-size: 1.02rem;
     }
 
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.25rem;
+      margin-top: 1.5rem;
+      text-align: left;
+    }
+    .download-card {
+      padding: 1.35rem 1.25rem;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .download-card h3 {
+      font-family: Oswald, sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin: 0 0 0.65rem;
+    }
+    .download-card p {
+      margin: 0 0 1rem;
+      max-width: none;
+      font-size: 0.96rem;
+    }
+    .download-card .btn { width: 100%; }
+
     .faq {
       padding: 0 0 4rem;
       border-top: 1px solid var(--line);
@@ -446,6 +482,7 @@
     @media (max-width: 520px) {
       .btn { width: 100%; }
       nav .wrap-wide { gap: 1rem; }
+      .download-grid { grid-template-columns: 1fr; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -463,7 +500,7 @@
   <nav aria-label="Primary">
     <div class="wrap-wide">
       <a href="play/">Play</a>
-      <a href="#download">Mac</a>
+      <a href="#download">Download</a>
       <a href="https://github.com/nmarchand73/StuntCarRacerForLovers">Source</a>
     </div>
   </nav>
@@ -475,10 +512,11 @@
       <p class="tagline">The classic jump. Shared.</p>
       <div class="cta">
         <a class="btn btn-primary" href="play/">Play free</a>
-        <a class="btn btn-ghost" id="dl-primary" href="download/StuntCarRacerForLovers-macOS-arm64.dmg">Mac DMG</a>
+        <a class="btn btn-ghost" id="dl-primary-mac" href="download/StuntCarRacerForLovers-macOS-arm64.dmg">Mac DMG</a>
+        <a class="btn btn-ghost" id="dl-primary-win" href="download/StuntCarRacerForLovers-Windows-x64.zip">Windows ZIP</a>
       </div>
       <p class="meta" id="dl-meta">
-        Free in browser · Apple Silicon
+        Free in browser · Apple Silicon · Windows x64
         <span class="build-stamp" id="build-stamp"></span>
       </p>
     </div>
@@ -516,13 +554,26 @@
     </section>
 
     <section class="download" id="download">
-      <div class="wrap">
-        <h2>Mac download</h2>
-        <p>
-          Apple Silicon DMG. First launch: run <strong>Fix macOS Gatekeeper.command</strong>
-          in the disk image, or use System Settings → Privacy &amp; Security → Open Anyway.
-        </p>
-        <a class="btn btn-ghost" id="dl-dmg" href="download/StuntCarRacerForLovers-macOS-arm64.dmg">Download DMG</a>
+      <div class="wrap-wide">
+        <h2>Download</h2>
+        <div class="download-grid">
+          <article class="download-card">
+            <h3>Mac</h3>
+            <p>
+              Apple Silicon DMG. First launch: run <strong>Fix macOS Gatekeeper.command</strong>
+              in the disk image, or use System Settings → Privacy &amp; Security → Open Anyway.
+            </p>
+            <a class="btn btn-ghost" id="dl-dmg" href="download/StuntCarRacerForLovers-macOS-arm64.dmg">Download DMG</a>
+          </article>
+          <article class="download-card">
+            <h3>Windows</h3>
+            <p>
+              64-bit ZIP — extract anywhere, then run <strong>stuntcarracer.exe</strong>.
+              If SmartScreen appears: <strong>More info</strong> → <strong>Run anyway</strong>.
+            </p>
+            <a class="btn btn-ghost" id="dl-zip" href="download/StuntCarRacerForLovers-Windows-x64.zip">Download ZIP</a>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -531,6 +582,10 @@
       <details>
         <summary>Play free in the browser?</summary>
         <p>Yes — open <a href="play/">the WebAssembly build</a>. Keyboard or gamepad works best.</p>
+      </details>
+      <details>
+        <summary>Windows SmartScreen warning?</summary>
+        <p>Expected for this unsigned build. Click <strong>More info</strong>, then <strong>Run anyway</strong>. See <strong>HOW-TO-OPEN.txt</strong> inside the ZIP.</p>
       </details>
       <details>
         <summary>Mac says the app was not opened?</summary>
@@ -549,7 +604,7 @@
       <div>
         <a href="play/">Play</a>
         ·
-        <a href="#download">Mac</a>
+        <a href="#download">Download</a>
         ·
         <a href="https://github.com/nmarchand73/StuntCarRacerForLovers">GitHub</a>
         ·
@@ -569,12 +624,19 @@
         if (info.version) parts.push(info.version);
         if (info.built_at) parts.push(info.built_at);
         if (parts.length && stamp) stamp.textContent = " · " + parts.join(" · ");
-        var href = info.dmg || info.arm64;
-        if (href) {
-          var a = document.getElementById("dl-primary");
-          var b = document.getElementById("dl-dmg");
-          if (a) a.href = href;
-          if (b) b.href = href;
+        var dmgHref = info.dmg || info.arm64;
+        if (dmgHref) {
+          ["dl-primary-mac", "dl-dmg"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.href = dmgHref;
+          });
+        }
+        var winHref = info.windows || info.windows_x64;
+        if (winHref) {
+          ["dl-primary-win", "dl-zip"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.href = winHref;
+          });
         }
       })
       .catch(function () {});

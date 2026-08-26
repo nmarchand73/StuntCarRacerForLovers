@@ -33,6 +33,8 @@
 
 **Mac download:** → **[Landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/)** (Apple Silicon `.dmg`)
 
+**Windows download:** → **[Landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/#download)** (x64 `.zip`)
+
 **From source:**
 
 ```bash
@@ -54,8 +56,9 @@ python3 -m http.server -d build-web 8080
 Pushing to `master` runs [`.github/workflows/publish-macos.yml`](.github/workflows/publish-macos.yml):
 
 1. Builds Release on `macos-14` (Apple Silicon) → `.dmg`  
-2. Builds the **Emscripten web** game → `/play/`  
-3. Deploys the landing page + downloads + web build to **GitHub Pages**
+2. Builds Release on `windows-latest` (x64) → `.zip`  
+3. Builds the **Emscripten web** game → `/play/`  
+4. Deploys the landing page + downloads + web build to **GitHub Pages**
 
 One-time repo setup: **Settings → Pages → Source: GitHub Actions**.
 
@@ -63,6 +66,12 @@ Local Mac DMG smoke test:
 
 ```bash
 ./scripts/package-macos-app.sh build/stuntcarracer data /tmp/scr-dist arm64
+```
+
+Local Windows ZIP (PowerShell, after a Release build):
+
+```powershell
+./scripts/package-windows-zip.ps1 -Binary build/Release/stuntcarracer.exe -DataDir data -OutDir dist -ArchLabel x64
 ```
 
 ---
@@ -192,7 +201,7 @@ src/                 Game + platform
   TrackProps.*       Roadside props, cube field, living ambient
 site/                GitHub Pages landing + Mac downloads
   (play/ from CI)    Published Emscripten web build
-scripts/             package-macos-app.sh
+scripts/             package-macos-app.sh, package-windows-zip.ps1
 .github/workflows/   publish-macos.yml (build + Pages)
 data/
   Bitmap/            Atlases, UI, icon
