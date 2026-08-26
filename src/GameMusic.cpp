@@ -278,6 +278,69 @@ void GameMusic_Mix(float* out, int frame_count, int channels) {
 
 #else /* !STUNT_PSGPLAY_MUSIC */
 
+#if defined(__EMSCRIPTEN__)
+
+#include <emscripten.h>
+
+EM_JS(void, js_web_music_init, (), {
+    if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.init) {
+        SCRWebMusic.init().catch(function (err) { console.error('SCRWebMusic init failed', err); });
+    }
+});
+
+EM_JS(void, js_web_music_shutdown, (), {
+    if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.shutdown) SCRWebMusic.shutdown();
+});
+
+EM_JS(void, js_web_music_set_mode, (int mode), {
+    if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.setGameMode) SCRWebMusic.setGameMode(mode);
+});
+
+EM_JS(int, js_web_music_is_menu_enabled, (), {
+    if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.isMenuMusicEnabled)
+        return SCRWebMusic.isMenuMusicEnabled() ? 1 : 0;
+    return 1;
+});
+
+EM_JS(void, js_web_music_set_menu_enabled, (int enabled), {
+    if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.setMenuMusicEnabled)
+        SCRWebMusic.setMenuMusicEnabled(!!enabled);
+});
+
+EM_JS(void, js_web_music_resume_context, (), {
+    if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.resumeAudioContext)
+        SCRWebMusic.resumeAudioContext().catch(function () {});
+});
+
+void GameMusic_Init(void) {
+    js_web_music_init();
+}
+
+void GameMusic_Shutdown(void) {
+    js_web_music_shutdown();
+}
+
+void GameMusic_Pump(void) {}
+
+void GameMusic_OnGameModeChanged(GameModeType prev, GameModeType next) {
+    (void)prev;
+    js_web_music_set_mode(static_cast<int>(next));
+}
+
+bool GameMusic_IsMenuMusicEnabled(void) {
+    return js_web_music_is_menu_enabled() != 0;
+}
+
+void GameMusic_SetMenuMusicEnabled(bool enabled) {
+    js_web_music_set_menu_enabled(enabled ? 1 : 0);
+}
+
+void GameMusic_ToggleMenuMusic(void) {
+    GameMusic_SetMenuMusicEnabled(!GameMusic_IsMenuMusicEnabled());
+}
+
+#else /* native build without psgplay */
+
 void GameMusic_Init(void) {}
 void GameMusic_Shutdown(void) {}
 void GameMusic_Pump(void) {}
@@ -296,4 +359,5 @@ void GameMusic_SetMenuMusicEnabled(bool enabled) {
 
 void GameMusic_ToggleMenuMusic(void) {}
 
+#endif /* __EMSCRIPTEN__ */
 #endif /* STUNT_PSGPLAY_MUSIC */

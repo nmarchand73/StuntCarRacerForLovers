@@ -60,6 +60,8 @@ Pushing to `master` runs [`.github/workflows/publish-macos.yml`](.github/workflo
 3. Builds the **Emscripten web** game → `/play/`  
 4. Deploys the landing page + downloads + web build to **GitHub Pages**
 
+Web music uses **ym2149-wasm** (chip-only SNDH). Race music plays Gold Runner subtune 2 (YM only); native Mac/Windows builds still use libpsgplay with digi samples.
+
 One-time repo setup: **Settings → Pages → Source: GitHub Actions**.
 
 Local Mac DMG smoke test:

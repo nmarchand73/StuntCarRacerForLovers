@@ -102,6 +102,7 @@ if(EMSCRIPTEN)
     target_link_options(stuntcarracer PRIVATE
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Tracks@/data/Tracks"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Sounds@/data/Sounds"
+      "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Music@/data/Music"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Bitmap@/data/Bitmap"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/DejaVuSans-Bold.ttf@/data/DejaVuSans-Bold.ttf"
       "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/data/Oswald-Bold.ttf@/data/Oswald-Bold.ttf"

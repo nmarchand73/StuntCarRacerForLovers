@@ -113,6 +113,11 @@ jobs:
       - name: Verify emcc
         run: emcc -v
 
+      - name: Vendor ym2149-wasm
+        run: |
+          chmod +x scripts/vendor-ym2149-wasm.sh
+          ./scripts/vendor-ym2149-wasm.sh
+
       - name: Configure
         run: emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
 
@@ -130,7 +135,10 @@ jobs:
             fi
           done
           cp web-dist/stuntcarracer.html web-dist/index.html
-          ls -lh web-dist
+          mkdir -p web-dist/ym2149
+          cp package/ym2149/ym2149_wasm.js package/ym2149/ym2149_wasm_bg.wasm web-dist/ym2149/
+          cp package/web-music.js web-dist/
+          ls -lh web-dist web-dist/ym2149
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

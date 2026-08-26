@@ -292,6 +292,32 @@
         }
         // Work-around chromium autoplay policy
         // https://github.com/emscripten-core/emscripten/issues/6511
+        window.__scrMusicQueue = [];
+        function queueScrMusic(method, args) {
+            if (window.SCRWebMusic && window.SCRWebMusic.__ready) {
+                var fn = window.SCRWebMusic[method];
+                if (typeof fn === 'function') return fn.apply(window.SCRWebMusic, args);
+            }
+            window.__scrMusicQueue.push({ method: method, args: args });
+        }
+        window.SCRWebMusic = {
+            __ready: false,
+            init: function() { queueScrMusic('init', []); return Promise.resolve(); },
+            shutdown: function() { queueScrMusic('shutdown', []); },
+            setGameMode: function(mode) { queueScrMusic('setGameMode', [mode]); },
+            isMenuMusicEnabled: function() {
+                if (window.SCRWebMusic.__ready && typeof window.SCRWebMusic._isMenuMusicEnabled === 'function')
+                    return window.SCRWebMusic._isMenuMusicEnabled();
+                return true;
+            },
+            setMenuMusicEnabled: function(on) { queueScrMusic('setMenuMusicEnabled', [on]); },
+            resumeAudioContext: function() {
+                if (window.SCRWebMusic.__ready && typeof window.SCRWebMusic._resumeAudioContext === 'function')
+                    return window.SCRWebMusic._resumeAudioContext();
+                return Promise.resolve();
+            }
+        };
+
         function resumeAudio(e) {
             if (typeof Module === 'undefined'
                 || typeof Module.SDL2 == 'undefined'
@@ -299,6 +325,9 @@
                 return;
             if (Module.SDL2.audioContext.state == 'suspended') {
                 Module.SDL2.audioContext.resume();
+            }
+            if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.resumeAudioContext) {
+                SCRWebMusic.resumeAudioContext();
             }
             if (Module.SDL2.audioContext.state == 'running') {
                 $game.removeEventListener('click', resumeAudio);
@@ -309,6 +338,7 @@
         document.addEventListener('keydown', resumeAudio);
 
     </script>
+    <script type="module" src="web-music.js"></script>
     {{{ SCRIPT }}}
   </body>
 </html>

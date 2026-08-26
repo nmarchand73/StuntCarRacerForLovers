@@ -20,6 +20,7 @@ StuntCarRacer_2008.VC.VC.opendb
 .vscode/
 build/
 build-web/
+package/ym2149/
 cmake-build-*/
 CMakeCache.txt
 CMakeFiles/
