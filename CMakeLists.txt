@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 
 project(StuntCarHD LANGUAGES CXX)
 
+if(MSVC)
+  # Portable Windows ZIP: avoid requiring a separate VC++ Redistributable install.
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(CMAKE_CXX_STANDARD 11)
