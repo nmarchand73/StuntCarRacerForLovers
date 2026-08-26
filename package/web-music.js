@@ -27,7 +27,7 @@ const TRACKS = {
       '/data/Music/Race/Wings_of_Death_STe.sndh',
     ],
     subtune: 1,
-    gain: 0.25,
+    gain: 0.325,
   },
 };
 

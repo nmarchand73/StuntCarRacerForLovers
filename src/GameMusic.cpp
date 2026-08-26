@@ -29,7 +29,7 @@ static struct psgplay* g_psgplay = NULL;
 static SDL_mutex* g_music_mutex = NULL;
 static std::deque<float> g_music_queue;
 static const float kMenuMusicGain = 0.35f;
-static const float kRaceMusicGain = 0.45f * 0.4f; /* 60% quieter than menu-relative race mix */
+static const float kRaceMusicGain = 0.45f * 0.4f * 1.3f; /* race mix, +30% vs prior level */
 static bool g_ready = false;
 static bool g_menu_music_enabled = true;
 static GameModeType g_last_music_mode = TRACK_MENU;
