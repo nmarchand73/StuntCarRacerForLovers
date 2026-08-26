@@ -1,6 +1,6 @@
 /**
  * Web music: SNDH (ym2149-wasm) for menu; pre-rendered Amiga race OGG for in-game.
- * Native builds use libpsgplay (menu) + libtfmxaudiodecoder (race).
+ * Native builds use libpsgplay (menu) + libxmp (race Amiga MOD).
  */
 import initYm2149, { Ym2149Player } from './ym2149/ym2149_wasm.js';
 
@@ -24,10 +24,10 @@ const TRACKS = {
   race: {
     kind: 'ogg',
     paths: [
-      'data/Music/Race/Hollywood_Poker_Pro.ingame.ogg',
-      '/data/Music/Race/Hollywood_Poker_Pro.ingame.ogg',
+      'data/Music/Race/Blood_Money.ingame.ogg',
+      '/data/Music/Race/Blood_Money.ingame.ogg',
     ],
-    gain: 0.325,
+    gain: 0.49,
   },
 };
 
@@ -218,7 +218,7 @@ async function startOggTrack(spec) {
   oggGain = gainNode;
   activeTrackKey = 'race';
   pendingRetry = false;
-  console.log('SCRWebMusic: playing Amiga race track (Hollywood Poker Pro ingame)');
+  console.log('SCRWebMusic: playing Amiga race track (Blood Money ingame)');
   return true;
 }
 

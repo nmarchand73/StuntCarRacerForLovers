@@ -89,6 +89,10 @@ extern void DrawOtherGraphics(void);
 extern void UpdateDamage(void);
 extern void ResetFourteenFrameTiming(void);
 extern void AdvanceFourteenFrameTiming(void);
+/** Amiga get.players.input keyboard coupling (fire→accel, brake→boost). */
+extern DWORD ApplyAmigaKeyboardInputCoupling(DWORD input);
+/** Advance fourteen-frame / boost-drain cadence at Amiga ~50 Hz (after car.control). */
+extern void AccumulateAmigaFrameTiming(double stepSeconds);
 /** Amiga init: triangular BCD sum over the track boost byte (reference/StuntCarRacer.s standard.league3). */
 extern long ComputeAmigaInitialBoostReserve(long trackBoostByte);
 /** Decode packed BCD boost.reserve for HUD (tens + ones nibbles). */

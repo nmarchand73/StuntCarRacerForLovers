@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Render Amiga Hollywood Poker Pro (ingame) to OGG for the web build.
-# Native builds decode dns.ingame + smp.ingame at runtime via libtfmxaudiodecoder.
+# Render Amiga race MOD to OGG for the web build.
+# Native builds decode mod.ingame at runtime via libxmp.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC_DIR="$ROOT/data/Music/Race/Hollywood_Poker_Pro"
-OUT="$ROOT/data/Music/Race/Hollywood_Poker_Pro.ingame.ogg"
-DURATION_SEC="${RACE_MUSIC_DURATION_SEC:-138.9}"
+MOD="${1:-$ROOT/data/Music/Race/Blood_Money/mod.ingame}"
+OUT="${2:-$ROOT/data/Music/Race/Blood_Money.ingame.ogg}"
+DURATION_SEC="${RACE_MUSIC_DURATION_SEC:-253.6}"
 
-if [[ ! -f "$SRC_DIR/dns.ingame" || ! -f "$SRC_DIR/smp.ingame" ]]; then
-  echo "Missing Amiga race music in $SRC_DIR" >&2
+if [[ ! -f "$MOD" ]]; then
+  echo "Missing race MOD: $MOD" >&2
   exit 1
 fi
 
@@ -23,13 +23,13 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   exit 1
 fi
 
-TMP_WAV="$(mktemp /tmp/hpp_render.XXXXXX.wav)"
+TMP_WAV="$(mktemp /tmp/race_music_render.XXXXXX.wav)"
 cleanup() { rm -f "$TMP_WAV"; }
 trap cleanup EXIT
 
 (
-  cd "$SRC_DIR"
-  uade123 --disable-timeouts -1 -f "$TMP_WAV" dns.ingame
+  cd "$(dirname "$MOD")"
+  uade123 --disable-timeouts -1 -f "$TMP_WAV" "$(basename "$MOD")"
 )
 
 ffmpeg -y -hide_banner -loglevel error \

@@ -148,6 +148,7 @@ static long accelerate, brake;
 
 static long accelerating = FALSE; // to remember previous control state
 extern long fourteen_frames_elapsed;
+static bool g_amigaBoostDrainDue = false;
 
 long engine_power = 240;    // (240 standard, 320 super)
 long boost_unit_value = 16; // (16 standard, 12 super)
@@ -976,8 +977,9 @@ static void BoostPower(long boost_flag, long accel_flag, long brake_flag) {
     if ((!boost_flag) && (NOT_WRECKED)) {
         if (accelerating || (accel_flag || brake_flag)) {
             if (boostReserve > 0) {
-                // Amiga boost.power: drain on physics frames where fourteen_frames_elapsed == 0.
-                if (fourteen_frames_elapsed == 0) {
+                /* Amiga boost.power: one drain decision per 50 Hz frame when fourteen_frames == 0. */
+                if (g_amigaBoostDrainDue && fourteen_frames_elapsed == 0) {
+                    g_amigaBoostDrainDue = false;
                     --boostUnit;
                     if (boostUnit < 0) {
                         boostUnit = boost_unit_value;
@@ -2037,10 +2039,26 @@ long damaged_limit = 10; // Actually track/league dependant (could add to track 
 //         fourteen_frames_elapsed has value of 0 or -1 (set)
 long road_cushion_value = 0, fourteen_frames_elapsed = 0;
 static unsigned char fourteen_frame_accumulator = 0;
+static double g_amigaFrameAccumSeconds = 0.0;
+
+static const double kAmigaFrameSeconds = 0.02; /* 50 Hz race.loop */
+
+DWORD ApplyAmigaKeyboardInputCoupling(DWORD input) {
+    /* reference/StuntCarRacer.s get.players.input (keyboard path). */
+    if (input & KEY_P1_BOOST) {
+        input |= KEY_P1_ACCEL;
+    }
+    if (input & KEY_P1_BRAKE) {
+        input |= KEY_P1_BOOST;
+    }
+    return input;
+}
 
 void ResetFourteenFrameTiming(void) {
     fourteen_frame_accumulator = 0;
     fourteen_frames_elapsed = 0;
+    g_amigaFrameAccumSeconds = 0.0;
+    g_amigaBoostDrainDue = false;
 }
 
 void AdvanceFourteenFrameTiming(void) {
@@ -2049,6 +2067,18 @@ void AdvanceFourteenFrameTiming(void) {
     const unsigned int sum = static_cast<unsigned int>(fourteen_frame_accumulator) + 0xeeu;
     fourteen_frame_accumulator = static_cast<unsigned char>(sum & 0xffu);
     fourteen_frames_elapsed = (sum > 0xffu) ? 0 : -1;
+}
+
+void AccumulateAmigaFrameTiming(double stepSeconds) {
+    if (stepSeconds <= 0.0) {
+        return;
+    }
+    g_amigaFrameAccumSeconds += stepSeconds;
+    while (g_amigaFrameAccumSeconds >= kAmigaFrameSeconds) {
+        g_amigaFrameAccumSeconds -= kAmigaFrameSeconds;
+        AdvanceFourteenFrameTiming();
+        g_amigaBoostDrainDue = true;
+    }
 }
 
 // following are only global due to use by two functions - could be passed in instead

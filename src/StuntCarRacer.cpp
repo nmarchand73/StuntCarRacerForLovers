@@ -2579,6 +2579,7 @@ static void RefreshGamepadInput(void) {
 
 static void RefreshCombinedInput(void) {
     RefreshGamepadInput();
+    g_keyboardInput = ApplyAmigaKeyboardInputCoupling(g_keyboardInput);
     if (bMultiplayerMode) {
         DWORD player1Input = 0;
         DWORD player2Input = 0;
@@ -2734,6 +2735,7 @@ static void CloseAllGamepads(void) {
 }
 #else
 static void RefreshCombinedInput(void) {
+    g_keyboardInput = ApplyAmigaKeyboardInputCoupling(g_keyboardInput);
     if (bMultiplayerMode) {
         // No gamepad API in this build; keep multiplayer controllable from keyboard.
         lastInput = g_keyboardInput;
@@ -3549,8 +3551,6 @@ static bool RunFrame(double frameTime, bool allowQuit) {
             } else {
                 if (!bPaused) {
                     CapturePreviousCarState();
-                    if (GameMode == GAME_IN_PROGRESS)
-                        AdvanceFourteenFrameTiming();
                     if ((GameMode == GAME_IN_PROGRESS) && (!bPlayerPaused))
                         CarBehaviour(lastInput, &player1_x, &player1_y, &player1_z, &player1_x_angle,
                                      &player1_y_angle, &player1_z_angle, (float)g_physicsStepSeconds);
@@ -3625,6 +3625,9 @@ static bool RunFrame(double frameTime, bool allowQuit) {
                     target_y = -target_y;
                     target_y >>= LOG_PRECISION;
                     target_z >>= LOG_PRECISION;
+                }
+                if ((GameMode == GAME_IN_PROGRESS) && !bPaused) {
+                    AccumulateAmigaFrameTiming(g_physicsStepSeconds);
                 }
             }
         }
