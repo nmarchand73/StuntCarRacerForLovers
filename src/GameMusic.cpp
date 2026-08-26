@@ -13,15 +13,14 @@ extern "C" {
 #include <psgplay/stereo.h>
 }
 
-#if defined(STUNT_XMP_MUSIC)
-extern "C" {
-#include <xmp.h>
-}
+#if defined(STUNT_OGG_RACE_MUSIC)
+#define STB_VORBIS_HEADER_ONLY
+#include "stb_vorbis.c"
 #endif
 
 static const char* kMenuMusicPath = "data/Music/Menu/Blood_Money.sndh";
-#if defined(STUNT_XMP_MUSIC)
-static const char* kRaceModPath = "data/Music/Race/Blood_Money/mod.ingame";
+#if defined(STUNT_OGG_RACE_MUSIC)
+static const char* kRaceOggPath = "data/Music/Race/Blood_Money.ingame.ogg";
 #else
 static const char* kRaceMusicPath = "data/Music/Race/Wings_of_Death_STe.sndh";
 static const int kRaceSubtune = 1;
@@ -35,19 +34,19 @@ static const size_t kMaxQueuedFrames = 88200;  /* ~2 s */
 enum ActiveMusicEngine {
     MUSIC_ENGINE_NONE = 0,
     MUSIC_ENGINE_PSGPLAY,
-    MUSIC_ENGINE_XMP,
+    MUSIC_ENGINE_OGG,
 };
 
 static std::vector<uint8_t> g_menu_sndh;
-#if !defined(STUNT_XMP_MUSIC)
+#if !defined(STUNT_OGG_RACE_MUSIC)
 static std::vector<uint8_t> g_race_sndh;
 #endif
 static const std::vector<uint8_t>* g_active_sndh = NULL;
 static int g_active_subtune = 1;
 static struct psgplay* g_psgplay = NULL;
-#if defined(STUNT_XMP_MUSIC)
-static xmp_context g_xmp_ctx = NULL;
-static bool g_race_xmp_ready = false;
+#if defined(STUNT_OGG_RACE_MUSIC)
+static stb_vorbis* g_race_vorbis = NULL;
+static bool g_race_ogg_ready = false;
 #endif
 static ActiveMusicEngine g_active_engine = MUSIC_ENGINE_NONE;
 static SDL_mutex* g_music_mutex = NULL;
@@ -100,53 +99,57 @@ static void StopPsgplayLocked() {
     }
 }
 
-#if defined(STUNT_XMP_MUSIC)
-static void StopXmpPlaybackLocked() {
-    if (g_xmp_ctx) {
-        xmp_end_player(g_xmp_ctx);
+#if defined(STUNT_OGG_RACE_MUSIC)
+static void StopOggPlaybackLocked() {
+    if (g_race_vorbis) {
+        stb_vorbis_close(g_race_vorbis);
+        g_race_vorbis = NULL;
+        g_race_ogg_ready = false;
     }
 }
 
-static bool InitRaceXmpLocked() {
-    if (g_race_xmp_ready && g_xmp_ctx) {
+static bool InitRaceOggLocked() {
+    if (g_race_ogg_ready && g_race_vorbis) {
         return true;
     }
 
-    if (!g_xmp_ctx) {
-        g_xmp_ctx = xmp_create_context();
-    }
-    if (!g_xmp_ctx) {
-        printf("GameMusic: xmp_create_context failed\n");
+    StopOggPlaybackLocked();
+
+    int error = 0;
+    g_race_vorbis = stb_vorbis_open_filename(kRaceOggPath, &error, NULL);
+    if (!g_race_vorbis) {
+        printf("GameMusic: failed to open race OGG %s (stb error %d)\n", kRaceOggPath, error);
         return false;
     }
 
-    if (xmp_load_module(g_xmp_ctx, kRaceModPath) != 0) {
-        printf("GameMusic: failed to load Amiga race MOD %s\n", kRaceModPath);
+    int16_t probe[4];
+    const int probe_frames =
+        stb_vorbis_get_samples_short_interleaved(g_race_vorbis, 2, probe, 4);
+    if (probe_frames <= 0) {
+        printf("GameMusic: race OGG produced no audio samples\n");
+        StopOggPlaybackLocked();
         return false;
     }
+    stb_vorbis_seek_start(g_race_vorbis);
 
-    g_race_xmp_ready = true;
-    printf("GameMusic: loaded Amiga race track (Blood Money ingame MOD)\n");
+    g_race_ogg_ready = true;
+    printf("GameMusic: loaded Amiga race track (Blood Money ingame OGG)\n");
     return true;
 }
 
-static bool StartRaceXmpPlayerLocked() {
-    if (!InitRaceXmpLocked()) {
+static bool StartRaceOggPlaybackLocked() {
+    if (!InitRaceOggLocked()) {
         return false;
     }
-    xmp_end_player(g_xmp_ctx);
-    if (xmp_start_player(g_xmp_ctx, kSampleRate, 0) != 0) {
-        printf("GameMusic: xmp_start_player failed\n");
-        return false;
-    }
+    stb_vorbis_seek_start(g_race_vorbis);
     return true;
 }
 #endif
 
 static void StopPlaybackLocked() {
     StopPsgplayLocked();
-#if defined(STUNT_XMP_MUSIC)
-    StopXmpPlaybackLocked();
+#if defined(STUNT_OGG_RACE_MUSIC)
+    StopOggPlaybackLocked();
 #endif
     g_active_engine = MUSIC_ENGINE_NONE;
     g_active_sndh = NULL;
@@ -185,11 +188,11 @@ static bool StartMenuPlaybackLocked() {
 
 static bool StartRacePlaybackLocked() {
     StopPlaybackLocked();
-#if defined(STUNT_XMP_MUSIC)
-    if (!StartRaceXmpPlayerLocked()) {
+#if defined(STUNT_OGG_RACE_MUSIC)
+    if (!StartRaceOggPlaybackLocked()) {
         return false;
     }
-    g_active_engine = MUSIC_ENGINE_XMP;
+    g_active_engine = MUSIC_ENGINE_OGG;
     g_active_sndh = NULL;
     return true;
 #else
@@ -235,29 +238,37 @@ static void PumpPsgplayLocked() {
     }
 }
 
-#if defined(STUNT_XMP_MUSIC)
-static void PumpXmpLocked() {
-    if (!g_xmp_ctx) {
+#if defined(STUNT_OGG_RACE_MUSIC)
+static void PumpOggLocked() {
+    if (!g_race_vorbis) {
         return;
     }
 
     int16_t chunk[kPumpChunkFrames * 2];
-    const int chunk_bytes = static_cast<int>(sizeof(chunk));
+    int idle_loops = 0;
     while (g_music_queue.size() / 2 < kTargetQueuedFrames) {
-        const int rc = xmp_play_buffer(g_xmp_ctx, chunk, chunk_bytes, 1);
-        if (rc < 0) {
-            printf("GameMusic: xmp_play_buffer failed\n");
+        const int frames =
+            stb_vorbis_get_samples_short_interleaved(g_race_vorbis, 2, chunk, kPumpChunkFrames * 2);
+        if (frames > 0) {
+            idle_loops = 0;
+            for (int i = 0; i < frames; ++i) {
+                QueueStereoFloatChunk(static_cast<float>(chunk[i * 2]) / 32768.0f,
+                                      static_cast<float>(chunk[i * 2 + 1]) / 32768.0f);
+            }
+            continue;
+        }
+
+        if (stb_vorbis_seek_start(g_race_vorbis) != 0) {
+            printf("GameMusic: failed to loop race OGG\n");
             StopPlaybackLocked();
             return;
         }
-        if (rc == 0) {
-            xmp_restart_module(g_xmp_ctx);
-            continue;
-        }
-        const size_t frames = static_cast<size_t>(rc) / (2 * sizeof(int16_t));
-        for (size_t i = 0; i < frames && i < kPumpChunkFrames; ++i) {
-            QueueStereoFloatChunk(static_cast<float>(chunk[i * 2]) / 32768.0f,
-                                  static_cast<float>(chunk[i * 2 + 1]) / 32768.0f);
+
+        ++idle_loops;
+        if (idle_loops >= 4) {
+            printf("GameMusic: race OGG decoder stalled\n");
+            StopPlaybackLocked();
+            return;
         }
     }
 }
@@ -268,9 +279,9 @@ static void PumpLocked() {
     case MUSIC_ENGINE_PSGPLAY:
         PumpPsgplayLocked();
         break;
-#if defined(STUNT_XMP_MUSIC)
-    case MUSIC_ENGINE_XMP:
-        PumpXmpLocked();
+#if defined(STUNT_OGG_RACE_MUSIC)
+    case MUSIC_ENGINE_OGG:
+        PumpOggLocked();
         break;
 #endif
     case MUSIC_ENGINE_NONE:
@@ -312,11 +323,12 @@ void GameMusic_Init(void) {
         return;
     }
 
-#if defined(STUNT_XMP_MUSIC)
-    if (!InitRaceXmpLocked()) {
+#if defined(STUNT_OGG_RACE_MUSIC)
+    if (!InitRaceOggLocked()) {
         g_menu_sndh.clear();
         return;
     }
+    StopOggPlaybackLocked();
 #else
     if (!LoadBinaryFile(kRaceMusicPath, g_race_sndh)) {
         g_menu_sndh.clear();
@@ -327,23 +339,15 @@ void GameMusic_Init(void) {
     g_music_mutex = SDL_CreateMutex();
     if (!g_music_mutex) {
         g_menu_sndh.clear();
-#if !defined(STUNT_XMP_MUSIC)
+#if !defined(STUNT_OGG_RACE_MUSIC)
         g_race_sndh.clear();
-#endif
-#if defined(STUNT_XMP_MUSIC)
-        if (g_xmp_ctx) {
-            xmp_release_module(g_xmp_ctx);
-            xmp_free_context(g_xmp_ctx);
-            g_xmp_ctx = NULL;
-            g_race_xmp_ready = false;
-        }
 #endif
         return;
     }
 
     g_ready = true;
-#if defined(STUNT_XMP_MUSIC)
-    printf("GameMusic: menu SNDH + Amiga MOD race track ready\n");
+#if defined(STUNT_OGG_RACE_MUSIC)
+    printf("GameMusic: menu SNDH + Amiga race OGG ready\n");
 #else
     printf("GameMusic: loaded menu and race SNDH tracks\n");
 #endif
@@ -363,17 +367,8 @@ void GameMusic_Shutdown(void) {
         g_music_mutex = NULL;
     }
 
-#if defined(STUNT_XMP_MUSIC)
-    if (g_xmp_ctx) {
-        xmp_release_module(g_xmp_ctx);
-        xmp_free_context(g_xmp_ctx);
-        g_xmp_ctx = NULL;
-        g_race_xmp_ready = false;
-    }
-#endif
-
     g_menu_sndh.clear();
-#if !defined(STUNT_XMP_MUSIC)
+#if !defined(STUNT_OGG_RACE_MUSIC)
     g_race_sndh.clear();
 #endif
     g_ready = false;

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(StuntCarHD LANGUAGES CXX)
+project(StuntCarHD LANGUAGES CXX C)
 
 if(MSVC)
   # Portable Windows ZIP: avoid requiring a separate VC++ Redistributable install.
@@ -16,7 +16,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(STUNT_ENABLE_WEB_ASSETS "Preload game assets when targeting Emscripten" ON)
 option(STUNT_FETCH_NATIVE_DEPS "Fetch SDL2/SDL2_ttf/glm from source for native builds" ON)
 option(STUNT_ENABLE_PSGPLAY_MUSIC "Stream Atari ST SNDH music via libpsgplay (native only)" ON)
-option(STUNT_ENABLE_XMP_MUSIC "Stream Amiga Protracker race music via libxmp (native only)" ON)
+option(STUNT_ENABLE_OGG_RACE_MUSIC "Stream pre-rendered Amiga race music OGG via stb_vorbis (native only)" ON)
 
 set(SCR_SOURCES
   src/3D_Engine.cpp
@@ -33,6 +33,7 @@ set(SCR_SOURCES
   src/platform_sdl_gl.cpp
   src/sound_sdl.cpp
   src/GameMusic.cpp
+  src/stb_vorbis_impl.c
   src/StuntCarRacer.cpp
   src/Track.cpp
   src/wavefunctions.cpp
@@ -235,15 +236,14 @@ else()
     message(WARNING "STUNT_ENABLE_PSGPLAY_MUSIC is ON but psgplay was not found at ${PSGPLAY_DIR}")
   endif()
 
-  if(STUNT_ENABLE_XMP_MUSIC)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/libxmp.cmake)
-    target_compile_definitions(stuntcarracer PRIVATE STUNT_XMP_MUSIC)
-    if(TARGET libxmp::xmp_static)
-      target_link_libraries(stuntcarracer PRIVATE libxmp::xmp_static)
-    elseif(TARGET xmp_static)
-      target_link_libraries(stuntcarracer PRIVATE xmp_static)
-    else()
-      message(FATAL_ERROR "libxmp static target not found after FetchContent.")
+  if(STUNT_ENABLE_OGG_RACE_MUSIC)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/stb_vorbis.cmake)
+    target_compile_definitions(stuntcarracer PRIVATE STUNT_OGG_RACE_MUSIC)
+    target_include_directories(stuntcarracer PRIVATE ${stb_SOURCE_DIR})
+    if(UNIX AND NOT APPLE)
+      target_link_libraries(stuntcarracer PRIVATE m)
+    elseif(MINGW)
+      target_link_libraries(stuntcarracer PRIVATE m)
     endif()
   endif()
 endif()

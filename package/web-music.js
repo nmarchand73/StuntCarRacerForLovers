@@ -1,6 +1,6 @@
 /**
  * Web music: SNDH (ym2149-wasm) for menu; pre-rendered Amiga race OGG for in-game.
- * Native builds use libpsgplay (menu) + libxmp (race Amiga MOD).
+ * Native builds use libpsgplay (menu) + stb_vorbis race OGG (Blood Money ingame).
  */
 import initYm2149, { Ym2149Player } from './ym2149/ym2149_wasm.js';
 

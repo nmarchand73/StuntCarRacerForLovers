@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Render Amiga race MOD to OGG for the web build.
-# Native builds decode mod.ingame at runtime via libxmp.
+# Render Amiga race music to OGG for native + web builds.
+# Native decodes Blood_Money.ingame.ogg at runtime via stb_vorbis.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,6 +33,6 @@ trap cleanup EXIT
 )
 
 ffmpeg -y -hide_banner -loglevel error \
-  -i "$TMP_WAV" -t "$DURATION_SEC" -c:a libopus -b:a 96k "$OUT"
+  -i "$TMP_WAV" -t "$DURATION_SEC" -strict -2 -c:a vorbis -q:a 5 -f ogg "$OUT"
 
 echo "Wrote $OUT ($(ffprobe -hide_banner -show_entries format=duration -of default=nw=1:nk=1 "$OUT" 2>/dev/null)s)"
