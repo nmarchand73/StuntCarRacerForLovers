@@ -1668,8 +1668,9 @@ static void HandleTrackPreview(TextHelper& txtHelper) {
         ResetLapData(PLAYER);
         gameStartTime = GetTimeSeconds();
         gameEndTime = 0;
-        long initialBoostReserve =
-            ComputeAmigaInitialBoostReserve(bSuperLeague ? SuperBoost : StandardBoost);
+        long initialBoostReserve = IsUnlimitedBoostEnabled()
+                                       ? 0x99
+                                       : ComputeAmigaInitialBoostReserve(bSuperLeague ? SuperBoost : StandardBoost);
         if (bSuperLeague) {
             road_cushion_value = 1;
             engine_power = 320;

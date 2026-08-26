@@ -976,15 +976,17 @@ static void BoostPower(long boost_flag, long accel_flag, long brake_flag) {
 
     if ((!boost_flag) && (NOT_WRECKED)) {
         if (accelerating || (accel_flag || brake_flag)) {
-            if (boostReserve > 0) {
-                /* Amiga boost.power: one drain decision per 50 Hz frame when fourteen_frames == 0. */
-                if (g_amigaBoostDrainDue && fourteen_frames_elapsed == 0) {
+            const long unlimited_boost = IsUnlimitedBoostEnabled();
+            if (unlimited_boost || boostReserve > 0) {
+                if (!unlimited_boost && g_amigaBoostDrainDue && fourteen_frames_elapsed == 0) {
                     g_amigaBoostDrainDue = false;
                     --boostUnit;
                     if (boostUnit < 0) {
                         boostUnit = boost_unit_value;
                         boostReserve = AmigaBcdDecrementBoostReserve(boostReserve);
                     }
+                } else if (unlimited_boost) {
+                    g_amigaBoostDrainDue = false;
                 }
                 boost_activated = 0x80;
                 engine_z_acceleration *= 2;

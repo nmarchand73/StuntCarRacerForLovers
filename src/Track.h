@@ -99,6 +99,8 @@ extern TrackPack GetTrackPack(void);
 extern long GetTrackPackTrackCount(TrackPack pack);
 extern long SetTrackPack(TrackPack pack);
 extern const WCHAR* GetTrackPackName(void);
+/** Loops pack: fire/boost does not drain (steep spiral layouts). */
+extern long IsUnlimitedBoostEnabled(void);
 
 extern char GetPieceAngleAndTemplate(long piece);
 

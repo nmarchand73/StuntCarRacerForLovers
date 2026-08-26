@@ -715,6 +715,8 @@ long SetTrackPack(TrackPack pack) {
 
 const WCHAR* GetTrackPackName(void) { return kTrackPackNames[gTrackPack]; }
 
+long IsUnlimitedBoostEnabled(void) { return (gTrackPack == TRACK_PACK_LOOPS) ? TRUE : FALSE; }
+
 /*    ======================================================================================= */
 /*    Function:        GetPieceAngleAndTemplate                                                */
 /*                                                                                            */
