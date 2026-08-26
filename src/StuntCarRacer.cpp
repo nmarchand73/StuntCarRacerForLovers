@@ -1368,7 +1368,6 @@ void CALLBACK OnFrameMove(RenderDevice* pDevice, double fTime, float fElapsedTim
 
     if ((GameMode == GAME_IN_PROGRESS) && (!bPaused)) {
         UpdateLapData();
-        AdvanceFourteenFrameTiming();
     }
 
     if ((GameMode == TRACK_MENU) || (GameMode == TRACK_PREVIEW)) {
@@ -1669,9 +1668,9 @@ static void HandleTrackPreview(TextHelper& txtHelper) {
         ResetLapData(PLAYER);
         gameStartTime = GetTimeSeconds();
         gameEndTime = 0;
-        long initialBoostReserve = StandardBoost;
+        long initialBoostReserve =
+            ComputeAmigaInitialBoostReserve(bSuperLeague ? SuperBoost : StandardBoost);
         if (bSuperLeague) {
-            initialBoostReserve = SuperBoost;
             road_cushion_value = 1;
             engine_power = 320;
             boost_unit_value = 12;
@@ -1919,7 +1918,8 @@ static void DrawGameplayCockpitHud(TextHelper& txtHelper, long lapValue, long op
                               static_cast<int>(BASE_HEIGHT - 48.0f));
     {
         std::wstringstream ss;
-        ss << L"L" << lapText << L"       B" << std::setw(2) << std::setfill(L'0') << boostReserve;
+        ss << L"L" << lapText << L"       B" << std::setw(2) << std::setfill(L'0')
+           << FormatBoostReserveForHud(boostReserve);
         txtHelper.DrawFormattedTextLine(ss.str());
     }
 
@@ -3549,6 +3549,8 @@ static bool RunFrame(double frameTime, bool allowQuit) {
             } else {
                 if (!bPaused) {
                     CapturePreviousCarState();
+                    if (GameMode == GAME_IN_PROGRESS)
+                        AdvanceFourteenFrameTiming();
                     if ((GameMode == GAME_IN_PROGRESS) && (!bPlayerPaused))
                         CarBehaviour(lastInput, &player1_x, &player1_y, &player1_z, &player1_x_angle,
                                      &player1_y_angle, &player1_z_angle, (float)g_physicsStepSeconds);
@@ -3632,7 +3634,6 @@ static bool RunFrame(double frameTime, bool allowQuit) {
     while (g_logicTickAccumulator >= g_logicTickInterval) {
         g_logicTickAccumulator -= g_logicTickInterval;
         g_logicInput = BuildLogicInputFromSamples(lastInput);
-        AdvanceBoostReserve(g_logicInput);  // drain boost once per logic tick (was 50x/sec in BoostPower)
         ResetControlSamplingWindow();
         OnFrameMove(&pDevice, frameTime, static_cast<float>(g_logicTickInterval), NULL);
         if ((GameMode == GAME_IN_PROGRESS) && bFrameMoved) {

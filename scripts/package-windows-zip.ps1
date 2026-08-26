@@ -4,10 +4,34 @@ param(
     [Parameter(Mandatory = $true)][string]$Binary,
     [Parameter(Mandatory = $true)][string]$DataDir,
     [Parameter(Mandatory = $true)][string]$OutDir,
-    [string]$ArchLabel = "x64"
+    [string]$ArchLabel = "x64",
+    [string]$MinGwBin = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+function Copy-MinGwRuntimeDlls {
+    param(
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [Parameter(Mandatory = $true)][string]$BinDir
+    )
+
+    if (-not (Test-Path $BinDir)) {
+        Write-Warning "MinGW bin directory not found: $BinDir"
+        return
+    }
+
+    $required = @('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll')
+    foreach ($name in $required) {
+        $src = Join-Path $BinDir $name
+        if (Test-Path $src) {
+            Copy-Item $src (Join-Path $Destination $name)
+            Write-Host "Bundled $name"
+        } else {
+            Write-Warning "Could not locate MinGW runtime DLL: $name"
+        }
+    }
+}
 
 function Copy-VcRuntimeDlls {
     param(
@@ -71,7 +95,11 @@ New-Item -ItemType Directory -Force -Path $GameDir | Out-Null
 
 Copy-Item $Binary (Join-Path $GameDir "stuntcarracer.exe")
 Copy-Item -Recurse $DataDir (Join-Path $GameDir "data")
-Copy-VcRuntimeDlls -Destination $GameDir
+if ($MinGwBin) {
+    Copy-MinGwRuntimeDlls -Destination $GameDir -BinDir $MinGwBin
+} else {
+    Copy-VcRuntimeDlls -Destination $GameDir
+}
 
 @'
 Stunt Car Racer for Lovers — Windows (64-bit)
@@ -83,9 +111,9 @@ Stunt Car Racer for Lovers — Windows (64-bit)
 First launch — Windows SmartScreen (unsigned build):
   Click "More info", then "Run anyway".
 
-If you see a missing VCRUNTIME140_1.dll error:
-  Re-download the latest ZIP from the project page, or install the
-  Microsoft Visual C++ 2015–2022 Redistributable (x64):
+If you see a missing DLL error on launch:
+  Re-download the latest ZIP from the project page.
+  MSVC builds may need the Visual C++ 2015–2022 Redistributable (x64):
   https://aka.ms/vcredist/x64
 
 Controls: U Amiga+ physics · I Speed feel · O Enhanced Look · P Pause · F11 fullscreen · N menu music

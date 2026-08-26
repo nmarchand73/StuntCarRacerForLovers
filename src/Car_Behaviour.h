@@ -89,8 +89,10 @@ extern void DrawOtherGraphics(void);
 extern void UpdateDamage(void);
 extern void ResetFourteenFrameTiming(void);
 extern void AdvanceFourteenFrameTiming(void);
-/** Call once per game-logic tick to drain boost reserve (was in BoostPower, now rate-limited). */
-extern void AdvanceBoostReserve(DWORD logicInput);
+/** Amiga init: triangular BCD sum over the track boost byte (reference/StuntCarRacer.s standard.league3). */
+extern long ComputeAmigaInitialBoostReserve(long trackBoostByte);
+/** Decode packed BCD boost.reserve for HUD (tens + ones nibbles). */
+extern long FormatBoostReserveForHud(long bcdReserve);
 /** Call once per game-logic tick to allow damage to be applied again (rate-limit damage like boost). */
 extern void BeginLogicTickDamagePeriod(void);
 

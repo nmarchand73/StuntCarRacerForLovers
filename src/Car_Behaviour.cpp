@@ -321,6 +321,7 @@ static long AmigaRecordingFrame = 0;
 /*    ===================== */
 static void CarControl(DWORD input);
 static void BoostPower(long boost_flag, long accelerate, long brake);
+static long AmigaBcdDecrementBoostReserve(long bcdReserve);
 
 static void CarMovement(void);
 static long GetPieceUsingMap(long x, long z, long* piece_out);
@@ -975,8 +976,14 @@ static void BoostPower(long boost_flag, long accel_flag, long brake_flag) {
     if ((!boost_flag) && (NOT_WRECKED)) {
         if (accelerating || (accel_flag || brake_flag)) {
             if (boostReserve > 0) {
-                // Reserve drain is done once per logic tick in AdvanceBoostReserve();
-                // here we only apply the boost effect for physics/display.
+                // Amiga boost.power: drain on physics frames where fourteen_frames_elapsed == 0.
+                if (fourteen_frames_elapsed == 0) {
+                    --boostUnit;
+                    if (boostUnit < 0) {
+                        boostUnit = boost_unit_value;
+                        boostReserve = AmigaBcdDecrementBoostReserve(boostReserve);
+                    }
+                }
                 boost_activated = 0x80;
                 engine_z_acceleration *= 2;
             }
@@ -986,21 +993,45 @@ static void BoostPower(long boost_flag, long accel_flag, long brake_flag) {
     return;
 }
 
-void AdvanceBoostReserve(DWORD logicInput) {
-    if (!(NOT_WRECKED))
-        return;
-    if (boostReserve <= 0)
-        return;
-    if (fourteen_frames_elapsed != 0)
-        return;
-    if (!(logicInput & KEY_P1_BOOST))
-        return;
-    // Boost key was held this logic window; drain one tick (original rate).
-    --boostUnit;
-    if (boostUnit < 0) {
-        boostUnit = boost_unit_value;
-        --boostReserve;
+long ComputeAmigaInitialBoostReserve(long trackBoostByte) {
+    unsigned char sum = 0;
+    unsigned char addend = 1;
+    long remaining = trackBoostByte & 0xff;
+
+    while (remaining > 0) {
+        int lo = (sum & 0x0f) + (addend & 0x0f);
+        int hi = (sum >> 4) + (addend >> 4);
+        if (lo > 9) {
+            lo -= 10;
+            hi += 1;
+        }
+        if (hi > 9) {
+            hi -= 10;
+        }
+        sum = static_cast<unsigned char>(((hi & 0x0f) << 4) | (lo & 0x0f));
+        ++addend;
+        --remaining;
     }
+
+    return static_cast<long>(sum);
+}
+
+long FormatBoostReserveForHud(long bcdReserve) {
+    const long value = bcdReserve & 0xff;
+    return ((value >> 4) & 0x0f) * 10 + (value & 0x0f);
+}
+
+static long AmigaBcdDecrementBoostReserve(long bcdReserve) {
+    long lo = (bcdReserve & 0x0f) - 1;
+    long hi = (bcdReserve >> 4) & 0x0f;
+    if (lo < 0) {
+        lo += 10;
+        hi -= 1;
+    }
+    if (hi < 0) {
+        return 0;
+    }
+    return ((hi & 0x0f) << 4) | (lo & 0x0f);
 }
 
 void BeginLogicTickDamagePeriod(void) {

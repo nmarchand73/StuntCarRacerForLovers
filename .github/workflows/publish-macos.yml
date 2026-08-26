@@ -60,24 +60,53 @@ jobs:
   build-windows:
     name: Build Windows x64 ZIP
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup MSYS2 MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msys2_shell: ucrt64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            make
+
+      - name: Checkout psgplay (sparse)
+        uses: actions/checkout@v5
+        with:
+          repository: nmarchand73/retro-music-player
+          path: retro-music-player
+          sparse-checkout: |
+            tools/psgplay
+          sparse-checkout-cone-mode: false
+
+      - name: Build libpsgplay
+        run: make -C retro-music-player/tools/psgplay lib/psgplay/libpsgplay.a
+
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSTUNT_ENABLE_PSGPLAY_MUSIC=OFF
+        env:
+          PSGPLAY_DIR: ${{ github.workspace }}/retro-music-player/tools/psgplay
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles"
 
       - name: Build
-        run: cmake --build build --config Release --parallel 4
+        run: cmake --build build --parallel 4
 
       - name: Locate executable
         id: exe
-        shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path build -Recurse -Filter stuntcarracer.exe | Select-Object -First 1
-          if (-not $exe) { throw "stuntcarracer.exe not found under build/" }
-          "path=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Found $($exe.FullName)"
+          exe="$(find build -name stuntcarracer.exe | head -1)"
+          if [ -z "$exe" ]; then
+            echo "stuntcarracer.exe not found under build/"
+            exit 1
+          fi
+          echo "path=$exe" >> "$GITHUB_OUTPUT"
+          ls -lh "$exe"
 
       - name: Package ZIP
         shell: pwsh
@@ -87,7 +116,8 @@ jobs:
             -Binary "${{ steps.exe.outputs.path }}" `
             -DataDir data `
             -OutDir dist `
-            -ArchLabel x64
+            -ArchLabel x64 `
+            -MinGwBin "C:/msys64/ucrt64/bin"
           Get-ChildItem dist
 
       - name: Upload artifact
