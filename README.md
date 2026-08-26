@@ -53,7 +53,7 @@ It is **not** a modern racing sim. No PBR, no licensed cars, no battle pass. It 
 - **Speed feel** — FOV and motion blur that kick in as you carry speed (<kbd>I</kbd>).
 - **Enhanced Look** — a denser SCR world (horizon blocks, rails, flags, drones) that still reads as Amiga art, not realism (<kbd>O</kbd>).
 - **Four track packs** — Classic, TNT, Original, and Loops — dozens of circuits to cycle from the menu.
-- **Atari ST soundtrack** — *Blood Money* on the menu, *Wings of Death STE* when the race starts; mute menu music with <kbd>N</kbd>.
+- **Soundtrack** — *Blood Money* (Atari ST) on the menu; Chris Hülsbeck’s *Hollywood Poker Pro* ingame (Amiga) during races; mute menu music with <kbd>N</kbd>.
 
 ---
 
@@ -61,8 +61,8 @@ It is **not** a modern racing sim. No PBR, no licensed cars, no battle pass. It 
 
 Native **Mac** and **Windows** builds stream authentic Atari ST SNDH music (chip **and** samples) via [psgplay](https://github.com/frno7/psgplay):
 
-- **Menu** — Paul Tonge, *Blood Money*
-- **Race** — Mad Max (Jochen Hippel), *Wings of Death STE*
+- **Menu** — Paul Tonge, *Blood Money* (Atari ST SNDH)
+- **Race** — Chris Hülsbeck, *Hollywood Poker Pro* ingame (Amiga TFMX/Dynamic Synthesizer)
 
 The **browser** build uses [ym2149-wasm](https://github.com/slippyex/ym2149-rs) for chip-only playback.
 
@@ -234,7 +234,7 @@ src/                 Game loop, car physics, platform (SDL/OpenGL)
 site/                Landing page (play/ filled by CI)
 scripts/             macOS DMG + Windows ZIP packaging, ym2149 vendor
 data/
-  Music/             Blood Money + Wings of Death STE SNDH
+  Music/             Blood Money SNDH + Hollywood Poker Pro Amiga race track
   Tracks/            Classic, TNT, Original, Loops
   Bitmap/            Textures, UI, icon
 tools/               Track extractors and generators

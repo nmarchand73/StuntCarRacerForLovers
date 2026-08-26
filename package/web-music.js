@@ -1,6 +1,6 @@
 /**
- * Chip-only SNDH music for the web build via ym2149-wasm.
- * Native builds use libpsgplay (digi + YM where present); web is YM chip playback.
+ * Web music: SNDH (ym2149-wasm) for menu; pre-rendered Amiga race OGG for in-game.
+ * Native builds use libpsgplay (menu) + libtfmxaudiodecoder (race).
  */
 import initYm2149, { Ym2149Player } from './ym2149/ym2149_wasm.js';
 
@@ -22,11 +22,11 @@ const TRACKS = {
     gain: 0.35,
   },
   race: {
+    kind: 'ogg',
     paths: [
-      'data/Music/Race/Wings_of_Death_STe.sndh',
-      '/data/Music/Race/Wings_of_Death_STe.sndh',
+      'data/Music/Race/Hollywood_Poker_Pro.ingame.ogg',
+      '/data/Music/Race/Hollywood_Poker_Pro.ingame.ogg',
     ],
-    subtune: 1,
     gain: 0.325,
   },
 };
@@ -58,6 +58,8 @@ function markPendingRetry() {
 
 let audioNode = null;
 let ymPlayer = null;
+let oggSource = null;
+let oggGain = null;
 let ymDurationSec = null;
 let ymSamplesOut = 0;
 let activeTrackKey = null;
@@ -135,7 +137,7 @@ function readSndhFromMemfs(paths) {
   return null;
 }
 
-async function fetchSndh(paths) {
+async function fetchBinary(paths) {
   const fromFs = readSndhFromMemfs(paths);
   if (fromFs) {
     return fromFs;
@@ -153,7 +155,11 @@ async function fetchSndh(paths) {
     }
   }
 
-  throw new Error(`Failed to load SNDH: ${paths.join(', ')}`);
+  throw new Error(`Failed to load audio: ${paths.join(', ')}`);
+}
+
+async function fetchSndh(paths) {
+  return fetchBinary(paths);
 }
 
 function stopPlayback() {
@@ -161,6 +167,19 @@ function stopPlayback() {
     audioNode.disconnect();
     audioNode.onaudioprocess = null;
     audioNode = null;
+  }
+  if (oggSource) {
+    try {
+      oggSource.stop(0);
+    } catch (error) {
+      // Already stopped.
+    }
+    oggSource.disconnect();
+    oggSource = null;
+  }
+  if (oggGain) {
+    oggGain.disconnect();
+    oggGain = null;
   }
   if (ymPlayer) {
     ymPlayer.stop();
@@ -170,6 +189,37 @@ function stopPlayback() {
   ymDurationSec = null;
   ymSamplesOut = 0;
   activeTrackKey = null;
+}
+
+async function startOggTrack(spec) {
+  const ctx = await waitForAudioContext();
+  if (!ctx) {
+    console.warn('SCRWebMusic: waiting for SDL audio context');
+    markPendingRetry();
+    return false;
+  }
+
+  if (ctx.state === 'suspended') {
+    markPendingRetry();
+    return false;
+  }
+
+  const bytes = await fetchBinary(spec.paths);
+  const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.loop = true;
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = spec.gain;
+  source.connect(gainNode);
+  gainNode.connect(ctx.destination);
+  source.start(0);
+  oggSource = source;
+  oggGain = gainNode;
+  activeTrackKey = 'race';
+  pendingRetry = false;
+  console.log('SCRWebMusic: playing Amiga race track (Hollywood Poker Pro ingame)');
+  return true;
 }
 
 function trackKeyForMode(mode) {
@@ -187,7 +237,7 @@ function trackKeyForMode(mode) {
 }
 
 async function startTrack(trackKey) {
-  if (activeTrackKey === trackKey && ymPlayer && audioNode) {
+  if (activeTrackKey === trackKey && ((ymPlayer && audioNode) || (trackKey === 'race' && oggSource))) {
     return true;
   }
 
@@ -200,6 +250,10 @@ async function startTrack(trackKey) {
   const spec = TRACKS[trackKey];
   if (!spec) {
     return false;
+  }
+
+  if (spec.kind === 'ogg') {
+    return startOggTrack(spec);
   }
 
   await ensureYmReady();

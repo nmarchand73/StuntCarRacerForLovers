@@ -1,6 +1,7 @@
 #include "platform_sdl_gl.h"
 #include "GameMusic.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <deque>
 #include <vector>
@@ -12,24 +13,49 @@ extern "C" {
 #include <psgplay/stereo.h>
 }
 
+#if defined(STUNT_TFMX_MUSIC)
+extern "C" {
+#include "tfmxaudiodecoder.h"
+}
+#endif
+
 static const char* kMenuMusicPath = "data/Music/Menu/Blood_Money.sndh";
+#if defined(STUNT_TFMX_MUSIC)
+static const char* kRaceTfmxPath = "data/Music/Race/Hollywood_Poker_Pro/dns.ingame";
+static const char* kRaceTfmxDir = "data/Music/Race/Hollywood_Poker_Pro";
+static const int kRaceTfmxSong = 0;
+#else
 static const char* kRaceMusicPath = "data/Music/Race/Wings_of_Death_STe.sndh";
+static const int kRaceSubtune = 1;
+#endif
 static const int kMenuSubtune = 1;
-static const int kRaceSubtune = 1; /* Wings of Death STE */
 static const int kSampleRate = 44100;
 static const size_t kPumpChunkFrames = 4096;
 static const size_t kTargetQueuedFrames = 22050; /* ~0.5 s */
 static const size_t kMaxQueuedFrames = 88200;  /* ~2 s */
 
+enum ActiveMusicEngine {
+    MUSIC_ENGINE_NONE = 0,
+    MUSIC_ENGINE_PSGPLAY,
+    MUSIC_ENGINE_TFMX,
+};
+
 static std::vector<uint8_t> g_menu_sndh;
+#if !defined(STUNT_TFMX_MUSIC)
 static std::vector<uint8_t> g_race_sndh;
+#endif
 static const std::vector<uint8_t>* g_active_sndh = NULL;
 static int g_active_subtune = 1;
 static struct psgplay* g_psgplay = NULL;
+#if defined(STUNT_TFMX_MUSIC)
+static void* g_tfmx_decoder = NULL;
+static bool g_race_tfmx_ready = false;
+#endif
+static ActiveMusicEngine g_active_engine = MUSIC_ENGINE_NONE;
 static SDL_mutex* g_music_mutex = NULL;
 static std::deque<float> g_music_queue;
 static const float kMenuMusicGain = 0.35f;
-static const float kRaceMusicGain = 0.45f * 0.4f * 1.3f; /* race mix, +30% vs prior level */
+static const float kRaceMusicGain = 0.45f * 0.4f * 1.3f;
 static bool g_ready = false;
 static bool g_menu_music_enabled = true;
 static GameModeType g_last_music_mode = TRACK_MENU;
@@ -69,46 +95,124 @@ static bool LoadBinaryFile(const char* path, std::vector<uint8_t>& out) {
     return true;
 }
 
-static void StopPlaybackLocked() {
+static void StopPsgplayLocked() {
     if (g_psgplay) {
         psgplay_free(g_psgplay);
         g_psgplay = NULL;
     }
+}
+
+#if defined(STUNT_TFMX_MUSIC)
+static void StopTfmxPlaybackLocked() {
+    /* Keep decoder loaded; only clear the active playback engine. */
+    (void)g_tfmx_decoder;
+}
+
+static bool InitRaceTfmxLocked() {
+    if (g_race_tfmx_ready && g_tfmx_decoder) {
+        return true;
+    }
+
+    g_tfmx_decoder = tfmxdec_new();
+    if (!g_tfmx_decoder) {
+        printf("GameMusic: tfmxdec_new failed\n");
+        return false;
+    }
+
+    tfmxdec_set_path(g_tfmx_decoder, kRaceTfmxDir);
+    if (!tfmxdec_load(g_tfmx_decoder, kRaceTfmxPath, kRaceTfmxSong)) {
+        printf("GameMusic: failed to load Amiga race music %s\n", kRaceTfmxPath);
+        tfmxdec_delete(g_tfmx_decoder);
+        g_tfmx_decoder = NULL;
+        return false;
+    }
+
+    tfmxdec_mixer_init(g_tfmx_decoder, kSampleRate, 16, 2, 0, 75);
+    tfmxdec_set_loop_mode(g_tfmx_decoder, 1);
+    g_race_tfmx_ready = true;
+    printf("GameMusic: loaded Amiga race track (%s, %u ms)\n",
+           tfmxdec_format_name(g_tfmx_decoder),
+           static_cast<unsigned>(tfmxdec_duration(g_tfmx_decoder)));
+    return true;
+}
+#endif
+
+static void StopPlaybackLocked() {
+    StopPsgplayLocked();
+#if defined(STUNT_TFMX_MUSIC)
+    StopTfmxPlaybackLocked();
+#endif
+    g_active_engine = MUSIC_ENGINE_NONE;
+    g_active_sndh = NULL;
     g_music_queue.clear();
 }
 
-static bool StartPlaybackLocked(const std::vector<uint8_t>& data, int subtune) {
+static void QueueStereoFloatChunk(float left, float right) {
+    while (g_music_queue.size() / 2 >= kMaxQueuedFrames) {
+        g_music_queue.pop_front();
+        g_music_queue.pop_front();
+    }
+    g_music_queue.push_back(left);
+    g_music_queue.push_back(right);
+}
+
+static void QueuePsgplayChunk(const psgplay_stereo* samples, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        QueueStereoFloatChunk(static_cast<float>(samples[i].left) / 32768.0f,
+                              static_cast<float>(samples[i].right) / 32768.0f);
+    }
+}
+
+static bool StartMenuPlaybackLocked() {
     StopPlaybackLocked();
-    g_active_sndh = &data;
-    g_active_subtune = subtune;
-    g_psgplay = psgplay_init(data.data(), data.size(), subtune, kSampleRate);
+    g_active_sndh = &g_menu_sndh;
+    g_active_subtune = kMenuSubtune;
+    g_psgplay = psgplay_init(g_menu_sndh.data(), g_menu_sndh.size(), kMenuSubtune, kSampleRate);
     if (!g_psgplay) {
-        printf("GameMusic: psgplay_init failed for subtune %d\n", subtune);
+        printf("GameMusic: psgplay_init failed for menu subtune %d\n", kMenuSubtune);
         g_active_sndh = NULL;
         return false;
     }
+    g_active_engine = MUSIC_ENGINE_PSGPLAY;
     return true;
 }
 
-static void QueueStereoChunk(const psgplay_stereo* samples, size_t count) {
-    for (size_t i = 0; i < count; ++i) {
-        while (g_music_queue.size() / 2 >= kMaxQueuedFrames) {
-            g_music_queue.pop_front();
-            g_music_queue.pop_front();
-        }
-        g_music_queue.push_back(static_cast<float>(samples[i].left) / 32768.0f);
-        g_music_queue.push_back(static_cast<float>(samples[i].right) / 32768.0f);
+static bool StartRacePlaybackLocked() {
+    StopPlaybackLocked();
+#if defined(STUNT_TFMX_MUSIC)
+    if (!InitRaceTfmxLocked()) {
+        return false;
     }
+    if (!tfmxdec_reinit(g_tfmx_decoder, kRaceTfmxSong)) {
+        printf("GameMusic: tfmxdec_reinit failed for race song %d\n", kRaceTfmxSong);
+        return false;
+    }
+    g_active_engine = MUSIC_ENGINE_TFMX;
+    g_active_sndh = NULL;
+    return true;
+#else
+    g_active_sndh = &g_race_sndh;
+    g_active_subtune = kRaceSubtune;
+    g_psgplay = psgplay_init(g_race_sndh.data(), g_race_sndh.size(), kRaceSubtune, kSampleRate);
+    if (!g_psgplay) {
+        printf("GameMusic: psgplay_init failed for race subtune %d\n", kRaceSubtune);
+        g_active_sndh = NULL;
+        return false;
+    }
+    g_active_engine = MUSIC_ENGINE_PSGPLAY;
+    return true;
+#endif
 }
 
 static void RestartCurrentTrackLocked() {
-    if (!g_active_sndh) {
-        return;
+    if (g_last_music_mode == GAME_IN_PROGRESS) {
+        StartRacePlaybackLocked();
+    } else if (g_menu_music_enabled) {
+        StartMenuPlaybackLocked();
     }
-    StartPlaybackLocked(*g_active_sndh, g_active_subtune);
 }
 
-static void PumpLocked() {
+static void PumpPsgplayLocked() {
     if (!g_psgplay) {
         return;
     }
@@ -125,7 +229,45 @@ static void PumpLocked() {
             RestartCurrentTrackLocked();
             return;
         }
-        QueueStereoChunk(chunk, static_cast<size_t>(read_count));
+        QueuePsgplayChunk(chunk, static_cast<size_t>(read_count));
+    }
+}
+
+#if defined(STUNT_TFMX_MUSIC)
+static void PumpTfmxLocked() {
+    if (!g_tfmx_decoder) {
+        return;
+    }
+
+    int16_t chunk[kPumpChunkFrames * 2];
+    const uint32_t bytes = static_cast<uint32_t>(sizeof(chunk));
+    while (g_music_queue.size() / 2 < kTargetQueuedFrames) {
+        if (tfmxdec_song_end(g_tfmx_decoder)) {
+            tfmxdec_reinit(g_tfmx_decoder, kRaceTfmxSong);
+        }
+        tfmxdec_buffer_fill(g_tfmx_decoder, chunk, bytes);
+        for (size_t i = 0; i < kPumpChunkFrames; ++i) {
+            QueueStereoFloatChunk(static_cast<float>(chunk[i * 2]) / 32768.0f,
+                                  static_cast<float>(chunk[i * 2 + 1]) / 32768.0f);
+        }
+    }
+}
+#endif
+
+static void PumpLocked() {
+    switch (g_active_engine) {
+    case MUSIC_ENGINE_PSGPLAY:
+        PumpPsgplayLocked();
+        break;
+#if defined(STUNT_TFMX_MUSIC)
+    case MUSIC_ENGINE_TFMX:
+        PumpTfmxLocked();
+        break;
+#endif
+    case MUSIC_ENGINE_NONE:
+        break;
+    default:
+        break;
     }
 }
 
@@ -134,7 +276,7 @@ static void ApplyMusicForMode(GameModeType mode) {
 
     if (mode == GAME_IN_PROGRESS) {
         g_music_gain = kRaceMusicGain;
-        if (!StartPlaybackLocked(g_race_sndh, kRaceSubtune)) {
+        if (!StartRacePlaybackLocked()) {
             printf("GameMusic: race music unavailable\n");
         }
         return;
@@ -143,11 +285,10 @@ static void ApplyMusicForMode(GameModeType mode) {
     if (mode == TRACK_MENU || mode == TRACK_PREVIEW || mode == GAME_OVER) {
         if (!g_menu_music_enabled) {
             StopPlaybackLocked();
-            g_active_sndh = NULL;
             return;
         }
         g_music_gain = kMenuMusicGain;
-        if (!StartPlaybackLocked(g_menu_sndh, kMenuSubtune)) {
+        if (!StartMenuPlaybackLocked()) {
             printf("GameMusic: menu music unavailable\n");
         }
     }
@@ -161,20 +302,41 @@ void GameMusic_Init(void) {
     if (!LoadBinaryFile(kMenuMusicPath, g_menu_sndh)) {
         return;
     }
+
+#if defined(STUNT_TFMX_MUSIC)
+    if (!InitRaceTfmxLocked()) {
+        g_menu_sndh.clear();
+        return;
+    }
+#else
     if (!LoadBinaryFile(kRaceMusicPath, g_race_sndh)) {
         g_menu_sndh.clear();
         return;
     }
+#endif
 
     g_music_mutex = SDL_CreateMutex();
     if (!g_music_mutex) {
         g_menu_sndh.clear();
+#if !defined(STUNT_TFMX_MUSIC)
         g_race_sndh.clear();
+#endif
+#if defined(STUNT_TFMX_MUSIC)
+        if (g_tfmx_decoder) {
+            tfmxdec_delete(g_tfmx_decoder);
+            g_tfmx_decoder = NULL;
+            g_race_tfmx_ready = false;
+        }
+#endif
         return;
     }
 
     g_ready = true;
+#if defined(STUNT_TFMX_MUSIC)
+    printf("GameMusic: menu SNDH + Amiga TFMX race track ready\n");
+#else
     printf("GameMusic: loaded menu and race SNDH tracks\n");
+#endif
     ApplyMusicForMode(TRACK_MENU);
 }
 
@@ -186,14 +348,23 @@ void GameMusic_Shutdown(void) {
     if (g_music_mutex) {
         SDL_LockMutex(g_music_mutex);
         StopPlaybackLocked();
-        g_active_sndh = NULL;
         SDL_UnlockMutex(g_music_mutex);
         SDL_DestroyMutex(g_music_mutex);
         g_music_mutex = NULL;
     }
 
+#if defined(STUNT_TFMX_MUSIC)
+    if (g_tfmx_decoder) {
+        tfmxdec_delete(g_tfmx_decoder);
+        g_tfmx_decoder = NULL;
+        g_race_tfmx_ready = false;
+    }
+#endif
+
     g_menu_sndh.clear();
+#if !defined(STUNT_TFMX_MUSIC)
     g_race_sndh.clear();
+#endif
     g_ready = false;
 }
 
@@ -239,7 +410,6 @@ void GameMusic_SetMenuMusicEnabled(bool enabled) {
         PumpLocked();
     } else if (g_last_music_mode != GAME_IN_PROGRESS) {
         StopPlaybackLocked();
-        g_active_sndh = NULL;
     }
     SDL_UnlockMutex(g_music_mutex);
     printf("Menu music: %s\n", enabled ? "On" : "Off");

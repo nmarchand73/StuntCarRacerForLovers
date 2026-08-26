@@ -16,6 +16,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(STUNT_ENABLE_WEB_ASSETS "Preload game assets when targeting Emscripten" ON)
 option(STUNT_FETCH_NATIVE_DEPS "Fetch SDL2/SDL2_ttf/glm from source for native builds" ON)
 option(STUNT_ENABLE_PSGPLAY_MUSIC "Stream Atari ST SNDH music via libpsgplay (native only)" ON)
+option(STUNT_ENABLE_TFMX_MUSIC "Stream Amiga TFMX/DNS race music via libtfmxaudiodecoder (native only)" ON)
 
 set(SCR_SOURCES
   src/3D_Engine.cpp
@@ -232,6 +233,12 @@ else()
     endif()
   elseif(STUNT_ENABLE_PSGPLAY_MUSIC)
     message(WARNING "STUNT_ENABLE_PSGPLAY_MUSIC is ON but psgplay was not found at ${PSGPLAY_DIR}")
+  endif()
+
+  if(STUNT_ENABLE_TFMX_MUSIC)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/libtfmxaudiodecoder.cmake)
+    target_compile_definitions(stuntcarracer PRIVATE STUNT_TFMX_MUSIC)
+    target_link_libraries(stuntcarracer PRIVATE tfmxaudiodecoder)
   endif()
 endif()
 
