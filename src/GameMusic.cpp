@@ -13,9 +13,9 @@ extern "C" {
 }
 
 static const char* kMenuMusicPath = "data/Music/Menu/Blood_Money.sndh";
-static const char* kRaceMusicPath = "data/Music/Race/Goldrunner.sndh";
+static const char* kRaceMusicPath = "data/Music/Race/Wings_of_Death_STe.sndh";
 static const int kMenuSubtune = 1;
-static const int kRaceSubtune = 1; /* Gold Runner: digi + YM */
+static const int kRaceSubtune = 1; /* Wings of Death STE */
 static const int kSampleRate = 44100;
 static const size_t kPumpChunkFrames = 4096;
 static const size_t kTargetQueuedFrames = 22050; /* ~0.5 s */

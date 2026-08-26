@@ -6,133 +6,145 @@
 
 <p align="center">
   <strong>The classic jump. Shared.</strong><br>
-  Geoff Crammond’s Amiga classic — remade for modern machines,<br>
-  with Amiga+ physics, and an Enhanced Look<br>
-  that stays inside the original colour world.
+  Geoff Crammond’s elevated stunt circuit — rebuilt for today,<br>
+  still flat-shaded, still that stomach-lift moment over the gap.
 </p>
 
 <p align="center">
-  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/play/"><img src="https://img.shields.io/badge/Play-in%20browser-5599ff?style=for-the-badge" alt="Play in browser"></a>
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/play/"><img src="https://img.shields.io/badge/Play-free%20in%20browser-5599ff?style=for-the-badge" alt="Play in browser"></a>
   &nbsp;
-  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/"><img src="https://img.shields.io/badge/Download-Mac%20DMG-ff7a18?style=for-the-badge" alt="Download Mac DMG"></a>
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/#download"><img src="https://img.shields.io/badge/Download-Mac%20%26%20Windows-ff7a18?style=for-the-badge" alt="Download Mac and Windows"></a>
   &nbsp;
-  <a href="https://github.com/nmarchand73/StuntCarRacerForLovers"><img src="https://img.shields.io/badge/GitHub-repo-161c28?style=for-the-badge&logo=github" alt="GitHub"></a>
+  <a href="https://github.com/nmarchand73/StuntCarRacerForLovers"><img src="https://img.shields.io/badge/Source-GitHub-161c28?style=for-the-badge&logo=github" alt="GitHub"></a>
 </p>
 
 <p align="center">
-  <code>macOS</code> · <code>Linux</code> · <code>Windows</code> · <code>Web</code>
+  <code>Web</code> · <code>macOS</code> · <code>Windows</code> · <code>Linux</code>
   &nbsp;·&nbsp;
-  <code>U</code> Amiga+ &nbsp;·&nbsp; <code>I</code> Speed &nbsp;·&nbsp; <code>O</code> Enhanced Look
+  <code>U</code> Amiga+ &nbsp;·&nbsp; <code>I</code> Speed feel &nbsp;·&nbsp; <code>O</code> Enhanced Look &nbsp;·&nbsp; <code>N</code> Menu music
 </p>
 
 ---
 
-## Quick start
+## Play in thirty seconds
 
-**Play in browser:** → **[nmarchand73.github.io/StuntCarRacerForLovers/play](https://nmarchand73.github.io/StuntCarRacerForLovers/play/)**  
+No install required — open the browser build, pick a track, hit **Enter**.
 
-**Mac download:** → **[Landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/)** (Apple Silicon `.dmg`)
+| Platform | Get it |
+|:---------|:-------|
+| **Browser** | **[Play now](https://nmarchand73.github.io/StuntCarRacerForLovers/play/)** — keyboard or gamepad |
+| **Mac (Apple Silicon)** | [DMG on the landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/#download) |
+| **Windows (x64)** | [ZIP on the landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/#download) — extract and run `stuntcarracer.exe` |
+| **From source** | `cmake -S . -B build && cmake --build build && ./build/stuntcarracer` |
 
-**Windows download:** → **[Landing page](https://nmarchand73.github.io/StuntCarRacerForLovers/#download)** (x64 `.zip`)
-
-**From source:**
-
-```bash
-cmake -S . -B build && cmake --build build
-./build/stuntcarracer
-```
-
-**Web (local):**
-
-```bash
-emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
-cmake --build build-web
-# open build-web/stuntcarracer.html (needs a local server for .wasm)
-python3 -m http.server -d build-web 8080
-```
-
-### GitHub Pages / CI
-
-Pushing to `master` runs [`.github/workflows/publish-macos.yml`](.github/workflows/publish-macos.yml):
-
-1. Builds Release on `macos-14` (Apple Silicon) → `.dmg`  
-2. Builds Release on `windows-latest` (x64) → `.zip`  
-3. Builds the **Emscripten web** game → `/play/`  
-4. Deploys the landing page + downloads + web build to **GitHub Pages**
-
-Web music uses **ym2149-wasm** (chip-only SNDH). Race music plays Gold Runner subtune 2 (YM only); native Mac/Windows builds still use libpsgplay with digi samples.
-
-One-time repo setup: **Settings → Pages → Source: GitHub Actions**.
-
-Local Mac DMG smoke test:
-
-```bash
-./scripts/package-macos-app.sh build/stuntcarracer data /tmp/scr-dist arm64
-```
-
-Local Windows ZIP (PowerShell, after a Release build):
-
-```powershell
-./scripts/package-windows-zip.ps1 -Binary build/Release/stuntcarracer.exe -DataDir data -OutDir dist -ArchLabel x64
-```
+First launch on desktop: unsigned builds may show a security prompt (Gatekeeper on Mac, SmartScreen on Windows). The landing page explains the one-time bypass.
 
 ---
 
-## Features
+## What this is
 
-| | |
-|:---|:---|
-| **Two-player** | Temporarily disabled |
-| **Amiga+ physics** | Vesuri-tuned springs & damping closer to the Amiga |
-| **Speed feel** | FOV punch and rim blur that scale with pace |
-| **Enhanced Look** | Denser SCR world — still flat-shaded, never photoreal |
-| **Track packs** | Classic · TNT · Original · Loops |
+*Stunt Car Racer for Lovers* is a free, open remake of Geoff Crammond’s 1989 Amiga classic — built on [StuntCarRemake](https://github.com/ptitSeb/stuntcarremake), then pushed toward the *feel* of the original: narrow elevated track, bold flat colours, that slow-motion crest before you drop.
 
-### Enhanced Look <kbd>O</kbd>
+It is **not** a modern racing sim. No PBR, no licensed cars, no battle pass. It is a love letter to a game where the whole world was a ribbon of tarmac in the sky — and the jump was the point.
 
-Turn it on for a lived-in Crammond arena. Turn it off for the classic remake presentation.
+**What you get that matters:**
 
-| Layer | What you get |
+- **Amiga+ physics** — suspension and damping tuned toward the original (toggle with <kbd>U</kbd>).
+- **Speed feel** — FOV and motion blur that kick in as you carry speed (<kbd>I</kbd>).
+- **Enhanced Look** — a denser SCR world (horizon blocks, rails, flags, drones) that still reads as Amiga art, not realism (<kbd>O</kbd>).
+- **Four track packs** — Classic, TNT, Original, and Loops — dozens of circuits to cycle from the menu.
+- **Atari ST soundtrack** — *Blood Money* on the menu, *Wings of Death STE* when the race starts; mute menu music with <kbd>N</kbd>.
+
+---
+
+## Soundtrack
+
+Native **Mac** and **Windows** builds stream authentic Atari ST SNDH music (chip **and** samples) via [psgplay](https://github.com/frno7/psgplay):
+
+- **Menu** — Paul Tonge, *Blood Money*
+- **Race** — Mad Max (Jochen Hippel), *Wings of Death STE*
+
+The **browser** build uses [ym2149-wasm](https://github.com/slippyex/ym2149-rs) for chip-only playback.
+
+Engine noise and crash SFX mix underneath on every platform.
+
+---
+
+## Enhanced Look <kbd>O</kbd>
+
+Turn it on for a lived-in Crammond arena. Turn it off for the lean remake look.
+
+| Layer | What appears |
 |:------|:-------------|
-| **Horizon** | Dense brick scenery rings (buildings, towers) |
+| **Horizon** | Brick scenery rings — towers and blocks at the skyline |
 | **Track** | Full yellow/red stripe panels, worn sides, bumpy stretches |
 | **Roadside** | Rails, flags, boards, floodlights, tyre stacks, billboards |
-| **Field** | Voxel clusters outside the circuit (trees, rocks, mesa) |
-| **Sky & life** | Layered clouds, birds, dust, blinkers, chase drones |
+| **Field** | Voxel clusters off the circuit (trees, rocks, mesa) |
+| **Sky & life** | Cloud layers, birds, dust, blinkers, chase drones (max 2 per track) |
 | **Cars** | Opponent liveries from the SCR palette |
 
-> Visual bumps and border wear do **not** change physics.  
-> Preview footer: `Physics … [U] | Speed … [I] | Look … [O]`
+Visual bumps and border wear do **not** change physics — only how the track reads.
 
 ---
 
 ## Controls
 
-### Presentation
+### Driving & presentation
 
-| Key | Action | Env | Default |
-|:---:|:-------|:----|:-------:|
-| <kbd>U</kbd> | Amiga+ physics | `SCR_AMIGA_PHYSICS=0\|1` | On |
-| <kbd>I</kbd> | Speed feel | `SCR_SPEED_FEEL=0\|1` | On |
-| <kbd>O</kbd> | Enhanced Look | `SCR_AESTHETICS=0\|1` | On |
-| <kbd>P</kbd> | Pause | — | — |
-| <kbd>F11</kbd> / <kbd>⌘↩</kbd> / <kbd>Alt+Enter</kbd> | Toggle fullscreen | — | — |
-| <kbd>F4</kbd> | Cycle scenery | — | — |
+| Key | Action | Default |
+|:---:|:-------|:-------:|
+| <kbd>←</kbd> <kbd>→</kbd> | Steer | — |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Accelerate / brake | — |
+| <kbd>Shift</kbd> | Boost | — |
+| <kbd>U</kbd> | Amiga+ physics | On |
+| <kbd>I</kbd> | Speed feel | On |
+| <kbd>O</kbd> | Enhanced Look | On |
+| <kbd>N</kbd> | Menu music on/off | On |
+| <kbd>P</kbd> | Pause | — |
+| <kbd>F11</kbd> / <kbd>⌘↩</kbd> / <kbd>Alt+Enter</kbd> | Fullscreen | — |
+| <kbd>F4</kbd> | Cycle scenery type | — |
 
-### Track preview
+### Track menu
 
 | Input | Action |
 |:------|:-------|
-| <kbd>←</kbd> <kbd>→</kbd> | Single Player ↔ Multiplayer |
-| <kbd>↑</kbd> <kbd>↓</kbd> | Opponent pack size **1–4** (SP) |
-| <kbd>Enter</kbd> / <kbd>A</kbd> | Start race |
+| <kbd>←</kbd> <kbd>→</kbd> or <kbd>↑</kbd> <kbd>↓</kbd> | Change track / pack |
+| <kbd>L</kbd> | Toggle Super League |
+| <kbd>Enter</kbd> | Race |
 
 ---
 
-## Build
+## Track packs
+
+| Pack | Highlights |
+|:-----|:-----------|
+| **Classic** | Little Ramp, Big Ramp, Draw Bridge, Roller Coaster, … |
+| **TNT** | Dizzy Descent, Witty Way, Rat Race, … (extracted from the Amiga expansion) |
+| **Original** | Skyline Spiral |
+| **Loops** | Helix Climb, Banked Bowl, Twin Cork, Sky Coil |
+
+Loops are steep spiral / banked-bowl layouts within the Amiga height-field model — not true inverted loops, but the jump lines stay clearable.
+
+---
+
+## Features at a glance
+
+| | |
+|:---|:---|
+| **Price** | Free — browser and downloads |
+| **Platforms** | WebAssembly, macOS (Apple Silicon), Windows x64, Linux (source) |
+| **Physics** | Amiga+ or Classic (<kbd>U</kbd>) |
+| **Presentation** | Speed feel + Enhanced Look toggles |
+| **Music** | Atari ST SNDH (native full mix; web chip-only) |
+| **Multiplayer** | Temporarily disabled |
+| **Fullscreen** | 16:9 letterbox, black bars on non-16:9 displays |
+
+---
+
+## Build & develop
 
 <details>
-<summary><strong>Native</strong> — macOS / Linux / Windows (SDL2 + OpenGL + SDL_ttf)</summary>
+<summary><strong>Native</strong> — SDL2 + OpenGL</summary>
 
 ```bash
 cmake -S . -B build
@@ -143,9 +155,11 @@ cmake --build build
 Windows Release:
 
 ```powershell
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
+
+Native music needs [psgplay](https://github.com/nmarchand73/retro-music-player/tree/main/tools/psgplay) as a sibling checkout (`../retro-music-player`) or under `retro-music-player/` in this repo. Disable with `-DSTUNT_ENABLE_PSGPLAY_MUSIC=OFF`.
 
 </details>
 
@@ -153,73 +167,84 @@ cmake --build build --config Release
 <summary><strong>Web</strong> — Emscripten</summary>
 
 ```bash
-emcmake cmake -S . -B build-web
+./scripts/vendor-ym2149-wasm.sh
+emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
 cmake --build build-web
+cp package/web-music.js build-web/
+mkdir -p build-web/ym2149 && cp package/ym2149/* build-web/ym2149/
+python3 -m http.server -d build-web 8080
 ```
 
-WebRTC signaling for 2-player: [webrtc/muttistuntcarsignal/README.md](webrtc/muttistuntcarsignal/README.md)
+Open `http://localhost:8080/stuntcarracer.html` — click the canvas once to unlock audio.
 
 </details>
 
----
+<details>
+<summary><strong>Package desktop builds</strong></summary>
 
-## Physics
-
-| Mode | Springs | Damping | Notes |
-|:-----|--------:|--------:|:------|
-| **Amiga+** <kbd>U</kbd> | `276` | `256` | Amiga air/ground angular damping — [`docs/physics-audit.md`](docs/physics-audit.md) |
-| **Classic** | `320` | `200` | Original remake defaults |
+Mac DMG:
 
 ```bash
-python3 tools/physics_parity_harness.py
+./scripts/package-macos-app.sh build/stuntcarracer data dist arm64
 ```
 
----
+Windows ZIP:
 
-## Track packs
-
-Cycle packs from the track menu.
-
-| Pack | Contents | How |
-|:-----|:---------|:----|
-| **Classic** | Little Ramp, Big Ramp, Draw Bridge, … | Bundled |
-| **TNT** | `DizzyDescent` … `RatRace` | `tools/extract_tnt_tracks.py` → `data/Tracks/TNT/` |
-| **Original** | Skyline Spiral | `tools/generate_original_tracks.py` → `data/Tracks/Original/` |
-| **Loops** | Helix Climb, Banked Bowl, Twin Cork, Sky Coil | `tools/generate_loops_tracks.py` → `data/Tracks/Loops/` |
-
-**Loops** are steep spiral / banked-bowl approximations (Amiga tracks are an XZ height field — not true inverted loops). Y-profile IDs and boost stay intact so jumps remain clearable.
-
-```bash
-python3 tools/generate_loops_tracks.py
+```powershell
+./scripts/package-windows-zip.ps1 -Binary build/Release/stuntcarracer.exe -DataDir data -OutDir dist -ArchLabel x64
 ```
+
+</details>
+
+<details>
+<summary><strong>CI / GitHub Pages</strong></summary>
+
+Pushing to `master` runs [`.github/workflows/publish-macos.yml`](.github/workflows/publish-macos.yml):
+
+1. macOS Apple Silicon → `.dmg`
+2. Windows x64 → `.zip`
+3. Emscripten → `/play/` on GitHub Pages
+4. Landing page + downloads deployed automatically
+
+Repo setup: **Settings → Pages → Source: GitHub Actions**.
+
+</details>
+
+<details>
+<summary><strong>Physics tuning</strong></summary>
+
+| Mode | Springs | Damping |
+|:-----|--------:|--------:|
+| **Amiga+** <kbd>U</kbd> | 276 | 256 |
+| **Classic** | 320 | 200 |
+
+See [`docs/physics-audit.md`](docs/physics-audit.md). Parity harness: `python3 tools/physics_parity_harness.py`
+
+</details>
 
 ---
 
 ## Project layout
 
 ```text
-src/                 Game + platform
-  AestheticsFeel.*   Enhanced Look toggle / fog
-  TrackProps.*       Roadside props, cube field, living ambient
-site/                GitHub Pages landing + Mac downloads
-  (play/ from CI)    Published Emscripten web build
-scripts/             package-macos-app.sh, package-windows-zip.ps1
-.github/workflows/   publish-macos.yml (build + Pages)
+src/                 Game loop, car physics, platform (SDL/OpenGL)
+  GameMusic.*        SNDH music (psgplay native, ym2149-wasm web)
+  AestheticsFeel.*   Enhanced Look
+  TrackProps.*       Roadside props, ambient life
+site/                Landing page (play/ filled by CI)
+scripts/             macOS DMG + Windows ZIP packaging, ym2149 vendor
 data/
-  Bitmap/            Atlases, UI, icon
-  Bitmap/enhanced/   Optional Enhanced textures
-  Tracks/            Classic + TNT + Original + Loops
-build/               Native out-of-source build
-build-web/           Emscripten build
-docs/                Physics audit
-tools/               Track extractors & generators
+  Music/             Blood Money + Wings of Death STE SNDH
+  Tracks/            Classic, TNT, Original, Loops
+  Bitmap/            Textures, UI, icon
+tools/               Track extractors and generators
 ```
 
 ---
 
 ## Design rule
 
-Enhanced Look lives in **Crammond’s SCR palette** — flat shades, dusty horizon, no photoreal asphalt / dirt / PBR.
+Enhanced Look stays in **Crammond’s SCR palette** — flat shades, dusty horizon, no photoreal asphalt.
 
 > If it wouldn’t look at home next to Amiga *Stunt Car Racer*, it doesn’t ship.
 
@@ -229,12 +254,21 @@ Enhanced Look lives in **Crammond’s SCR palette** — flat shades, dusty horiz
 
 | | |
 |:---|:---|
-| **Original** | Geoff Crammond / MicroProse |
-| **Remake base** | [ptitSeb/stuntcarremake](https://github.com/ptitSeb/stuntcarremake) · [SourceForge](http://sourceforge.net/projects/stuntcarremake/) |
-| **Amiga physics ref** | Vesuri framerate-unleashed disassembly |
+| **Original game** | Geoff Crammond / MicroProse |
+| **Remake base** | [ptitSeb/stuntcarremake](https://github.com/ptitSeb/stuntcarremake) |
+| **Amiga physics reference** | Vesuri framerate-unleashed disassembly |
+| **SNDH playback** | [psgplay](https://github.com/frno7/psgplay) (native), [ym2149-wasm](https://github.com/slippyex/ym2149-rs) (web) |
 | **Sound loading** | Forsaken / ProjectX port work by chino |
 
 ---
+
+<p align="center">
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/play/"><strong>Play free</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://nmarchand73.github.io/StuntCarRacerForLovers/#download"><strong>Download</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/nmarchand73/StuntCarRacerForLovers"><strong>GitHub</strong></a>
+</p>
 
 <p align="center">
   <sub>Stunt Car Racer for Lovers — the classic jump, shared.</sub>

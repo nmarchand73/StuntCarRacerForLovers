@@ -315,6 +315,12 @@
                 if (window.SCRWebMusic.__ready && typeof window.SCRWebMusic._resumeAudioContext === 'function')
                     return window.SCRWebMusic._resumeAudioContext();
                 return Promise.resolve();
+            },
+            onAudioUnlocked: function() {
+                if (window.SCRWebMusic.__ready && typeof window.SCRWebMusic.onAudioUnlocked === 'function')
+                    return window.SCRWebMusic.onAudioUnlocked();
+                queueScrMusic('onAudioUnlocked', []);
+                return Promise.resolve();
             }
         };
 
@@ -323,15 +329,21 @@
                 || typeof Module.SDL2 == 'undefined'
                 || typeof Module.SDL2.audioContext == 'undefined')
                 return;
-            if (Module.SDL2.audioContext.state == 'suspended') {
-                Module.SDL2.audioContext.resume();
+            var ctx = Module.SDL2.audioContext;
+            function unlockMusic() {
+                if (typeof SCRWebMusic !== 'undefined') {
+                    if (SCRWebMusic.resumeAudioContext) SCRWebMusic.resumeAudioContext();
+                    if (SCRWebMusic.onAudioUnlocked) SCRWebMusic.onAudioUnlocked();
+                }
+                if (ctx.state === 'running') {
+                    $game.removeEventListener('click', resumeAudio);
+                    document.removeEventListener('keydown', resumeAudio);
+                }
             }
-            if (typeof SCRWebMusic !== 'undefined' && SCRWebMusic.resumeAudioContext) {
-                SCRWebMusic.resumeAudioContext();
-            }
-            if (Module.SDL2.audioContext.state == 'running') {
-                $game.removeEventListener('click', resumeAudio);
-                document.removeEventListener('keydown', resumeAudio);
+            if (ctx.state === 'suspended') {
+                ctx.resume().then(unlockMusic).catch(unlockMusic);
+            } else {
+                unlockMusic();
             }
         }
         $game.addEventListener('click', resumeAudio);

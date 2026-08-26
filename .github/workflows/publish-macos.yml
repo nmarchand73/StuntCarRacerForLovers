@@ -135,10 +135,11 @@ jobs:
             fi
           done
           cp web-dist/stuntcarracer.html web-dist/index.html
-          mkdir -p web-dist/ym2149
+          mkdir -p web-dist/ym2149 web-dist/data/Music
           cp package/ym2149/ym2149_wasm.js package/ym2149/ym2149_wasm_bg.wasm web-dist/ym2149/
           cp package/web-music.js web-dist/
-          ls -lh web-dist web-dist/ym2149
+          cp -R data/Music/. web-dist/data/Music/
+          ls -lh web-dist web-dist/ym2149 web-dist/data/Music
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

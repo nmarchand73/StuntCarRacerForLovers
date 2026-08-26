@@ -1,6 +1,6 @@
 /**
  * Chip-only SNDH music for the web build via ym2149-wasm.
- * Native builds use libpsgplay (digi + YM); here Gold Runner uses subtune 2 (YM only).
+ * Native builds use libpsgplay (digi + YM where present); web is YM chip playback.
  */
 import initYm2149, { Ym2149Player } from './ym2149/ym2149_wasm.js';
 
@@ -14,28 +14,52 @@ const GAME_MODE = {
 
 const TRACKS = {
   menu: {
-    url: 'data/Music/Menu/Blood_Money.sndh',
+    paths: [
+      'data/Music/Menu/Blood_Money.sndh',
+      '/data/Music/Menu/Blood_Money.sndh',
+    ],
     subtune: 1,
     gain: 0.35,
   },
   race: {
-    url: 'data/Music/Race/Goldrunner.sndh',
-    subtune: 2,
-    gain: 0.18,
+    paths: [
+      'data/Music/Race/Wings_of_Death_STe.sndh',
+      '/data/Music/Race/Wings_of_Death_STe.sndh',
+    ],
+    subtune: 1,
+    gain: 0.25,
   },
 };
 
 let ymReady = null;
 let menuMusicEnabled = true;
 let lastGameMode = GAME_MODE.TRACK_MENU;
-let pendingMode = null;
+let pendingRetry = false;
+let retryTimer = null;
+
+function scheduleMusicRetry() {
+  if (retryTimer || !pendingRetry) {
+    return;
+  }
+  retryTimer = window.setInterval(() => {
+    if (!pendingRetry) {
+      window.clearInterval(retryTimer);
+      retryTimer = null;
+      return;
+    }
+    void retryIfNeeded();
+  }, 400);
+}
+
+function markPendingRetry() {
+  pendingRetry = true;
+  scheduleMusicRetry();
+}
 
 let audioNode = null;
 let ymPlayer = null;
-let ymBytes = null;
 let ymDurationSec = null;
 let ymSamplesOut = 0;
-let ymOutputRate = YM_SAMPLE_RATE;
 let activeTrackKey = null;
 
 function copyOrResample(source, target) {
@@ -64,11 +88,72 @@ function getAudioContext() {
   return null;
 }
 
+async function waitForAudioContext(timeoutMs = 15000) {
+  const started = performance.now();
+  while (performance.now() - started < timeoutMs) {
+    const ctx = getAudioContext();
+    if (ctx) {
+      return ctx;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return null;
+}
+
 async function ensureYmReady() {
   if (!ymReady) {
     ymReady = initYm2149(new URL('./ym2149/ym2149_wasm_bg.wasm', import.meta.url)).then(() => undefined);
   }
   await ymReady;
+}
+
+function getEmscriptenFs() {
+  if (typeof Module !== 'undefined' && Module.FS && Module.FS.readFile) {
+    return Module.FS;
+  }
+  if (typeof FS !== 'undefined' && FS.readFile) {
+    return FS;
+  }
+  return null;
+}
+
+function readSndhFromMemfs(paths) {
+  const fs = getEmscriptenFs();
+  if (!fs) {
+    return null;
+  }
+  for (const path of paths) {
+    try {
+      const bytes = fs.readFile(path);
+      if (bytes && bytes.length > 0) {
+        return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      }
+    } catch (error) {
+      // Try the next mounted path.
+    }
+  }
+  return null;
+}
+
+async function fetchSndh(paths) {
+  const fromFs = readSndhFromMemfs(paths);
+  if (fromFs) {
+    return fromFs;
+  }
+
+  for (const path of paths) {
+    const url = path.startsWith('/') ? path.slice(1) : path;
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return new Uint8Array(await response.arrayBuffer());
+      }
+    } catch (error) {
+      // Try the next URL.
+    }
+  }
+
+  throw new Error(`Failed to load SNDH: ${paths.join(', ')}`);
 }
 
 function stopPlayback() {
@@ -82,7 +167,6 @@ function stopPlayback() {
     ymPlayer.free();
     ymPlayer = null;
   }
-  ymBytes = null;
   ymDurationSec = null;
   ymSamplesOut = 0;
   activeTrackKey = null;
@@ -102,48 +186,44 @@ function trackKeyForMode(mode) {
   return null;
 }
 
-async function fetchSndh(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to load ${url}: ${response.status}`);
-  }
-  return new Uint8Array(await response.arrayBuffer());
-}
-
 async function startTrack(trackKey) {
-  if (activeTrackKey === trackKey && ymPlayer) {
-    return;
+  if (activeTrackKey === trackKey && ymPlayer && audioNode) {
+    return true;
   }
 
   stopPlayback();
   if (!trackKey) {
-    return;
+    pendingRetry = false;
+    return true;
   }
 
   const spec = TRACKS[trackKey];
   if (!spec) {
-    return;
+    return false;
   }
 
   await ensureYmReady();
 
-  const ctx = getAudioContext();
+  const ctx = await waitForAudioContext();
   if (!ctx) {
-    console.warn('SCRWebMusic: SDL audio context not ready yet');
-    return;
-  }
-  if (ctx.state === 'suspended') {
-    await ctx.resume();
+    console.warn('SCRWebMusic: waiting for SDL audio context');
+    markPendingRetry();
+    return false;
   }
 
-  ymBytes = await fetchSndh(spec.url);
-  const player = new Ym2149Player(ymBytes);
+  if (ctx.state === 'suspended') {
+    markPendingRetry();
+    return false;
+  }
+
+  const sndhBytes = await fetchSndh(spec.paths);
+  const player = new Ym2149Player(sndhBytes);
   ymPlayer = player;
 
   const subtune = spec.subtune;
   if (player.subsongCount() >= subtune) {
     player.setSubsong(subtune);
-  } else if (subtune !== 1) {
+  } else {
     player.setSubsong(1);
   }
 
@@ -160,8 +240,8 @@ async function startTrack(trackKey) {
         ? frameCount / rateHz
         : null;
   ymSamplesOut = 0;
-  ymOutputRate = ctx.sampleRate || YM_SAMPLE_RATE;
   activeTrackKey = trackKey;
+  pendingRetry = false;
 
   const bufferSize = 2048;
   const scriptNode = ctx.createScriptProcessor(bufferSize, 0, 2);
@@ -190,25 +270,30 @@ async function startTrack(trackKey) {
 
   scriptNode.connect(ctx.destination);
   audioNode = scriptNode;
+  console.log(`SCRWebMusic: playing ${trackKey} (subtune ${subtune})`);
+  return true;
 }
 
 async function applyGameMode(mode) {
   lastGameMode = mode;
-  pendingMode = null;
   const trackKey = trackKeyForMode(mode);
   try {
-    await startTrack(trackKey);
+    const ok = await startTrack(trackKey);
+    if (!ok) {
+      markPendingRetry();
+    }
   } catch (error) {
     console.error('SCRWebMusic:', error);
+    markPendingRetry();
     stopPlayback();
   }
 }
 
-async function flushPendingMode() {
-  if (pendingMode == null) {
+async function retryIfNeeded() {
+  if (!pendingRetry && activeTrackKey === trackKeyForMode(lastGameMode)) {
     return;
   }
-  await applyGameMode(pendingMode);
+  await applyGameMode(lastGameMode);
 }
 
 async function drainScrMusicQueue() {
@@ -230,11 +315,11 @@ const SCRWebMusicImpl = {
 
   shutdown() {
     stopPlayback();
+    pendingRetry = false;
   },
 
   setGameMode(mode) {
-    pendingMode = mode;
-    void flushPendingMode();
+    void applyGameMode(mode);
   },
 
   _isMenuMusicEnabled() {
@@ -251,6 +336,11 @@ const SCRWebMusicImpl = {
     if (ctx && ctx.state === 'suspended') {
       await ctx.resume();
     }
+    await retryIfNeeded();
+  },
+
+  async onAudioUnlocked() {
+    await retryIfNeeded();
   },
 };
 
@@ -273,6 +363,9 @@ window.SCRWebMusic = {
   },
   resumeAudioContext() {
     return SCRWebMusicImpl._resumeAudioContext();
+  },
+  onAudioUnlocked() {
+    return SCRWebMusicImpl.onAudioUnlocked();
   },
 };
 
