@@ -1,6 +1,7 @@
 #ifdef linux
 
 #include "platform_sdl_gl.h"
+#include "GameMusic.h"
 
 #include <algorithm>
 #include <cmath>
@@ -108,6 +109,10 @@ static void audio_callback(void* userdata, Uint8* stream, int len) {
             source->frame_pos += step;
         }
     }
+
+#if defined(STUNT_PSGPLAY_MUSIC)
+    GameMusic_Mix(out, out_frames, channels);
+#endif
 
     for (int i = 0; i < out_frames * channels; ++i) {
         out[i] = clampf(out[i], -1.0f, 1.0f);

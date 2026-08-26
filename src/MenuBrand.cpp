@@ -225,7 +225,7 @@ void ResetTrackPreviewBrandMotion(double timeSeconds) {
 
 void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,
                         const wchar_t* trackName, const wchar_t* packName, bool superLeague, bool amigaPhysics,
-                        bool speedFeel, double timeSeconds) {
+                        bool speedFeel, bool menuMusic, double timeSeconds) {
     const float W = static_cast<float>(MenuProjectionWidth());
     const float H = 480.0f;
 
@@ -301,7 +301,8 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
     {
         std::wstringstream ss;
         ss << L"Physics " << (amigaPhysics ? L"Amiga+" : L"Classic") << L" [U]  |  Speed "
-           << (speedFeel ? L"On" : L"Off") << L" [I]  |  League [L]";
+           << (speedFeel ? L"On" : L"Off") << L" [I]  |  Music " << (menuMusic ? L"On" : L"Off")
+           << L" [N]  |  League [L]";
         DrawCenteredShadow(bodyText, ss.str(), 446, 0.58f, 0.52f, 0.54f, 0.82f, 1);
     }
 }

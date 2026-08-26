@@ -10,6 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(STUNT_ENABLE_WEB_ASSETS "Preload game assets when targeting Emscripten" ON)
 option(STUNT_FETCH_NATIVE_DEPS "Fetch SDL2/SDL2_ttf/glm from source for native builds" ON)
+option(STUNT_ENABLE_PSGPLAY_MUSIC "Stream Atari ST SNDH music via libpsgplay (native only)" ON)
 
 set(SCR_SOURCES
   src/3D_Engine.cpp
@@ -25,6 +26,7 @@ set(SCR_SOURCES
   src/MenuBrand.cpp
   src/platform_sdl_gl.cpp
   src/sound_sdl.cpp
+  src/GameMusic.cpp
   src/StuntCarRacer.cpp
   src/Track.cpp
   src/wavefunctions.cpp
@@ -193,6 +195,29 @@ else()
       SDL2_ttf::SDL2_ttf
       glm::glm
     )
+  endif()
+
+  set(PSGPLAY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../retro-music-player/tools/psgplay")
+  set(PSGPLAY_LIB "${PSGPLAY_DIR}/lib/psgplay/libpsgplay.a")
+  if(STUNT_ENABLE_PSGPLAY_MUSIC AND EXISTS "${PSGPLAY_DIR}/Makefile")
+    add_custom_command(
+      OUTPUT ${PSGPLAY_LIB}
+      COMMAND ${CMAKE_MAKE_PROGRAM} -C ${PSGPLAY_DIR} lib/psgplay/libpsgplay.a
+      WORKING_DIRECTORY ${PSGPLAY_DIR}
+      COMMENT "Building libpsgplay for in-game SNDH music"
+      VERBATIM
+    )
+    add_custom_target(psgplay_lib DEPENDS ${PSGPLAY_LIB})
+    set_property(TARGET psgplay_lib PROPERTY FOLDER "thirdparty")
+    add_dependencies(stuntcarracer psgplay_lib)
+    target_compile_definitions(stuntcarracer PRIVATE STUNT_PSGPLAY_MUSIC)
+    target_include_directories(stuntcarracer PRIVATE ${PSGPLAY_DIR}/include)
+    target_link_libraries(stuntcarracer PRIVATE ${PSGPLAY_LIB})
+    if(UNIX AND NOT APPLE)
+      target_link_libraries(stuntcarracer PRIVATE m)
+    endif()
+  elseif(STUNT_ENABLE_PSGPLAY_MUSIC)
+    message(WARNING "STUNT_ENABLE_PSGPLAY_MUSIC is ON but psgplay was not found at ${PSGPLAY_DIR}")
   endif()
 endif()
 

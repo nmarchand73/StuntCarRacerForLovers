@@ -25,6 +25,7 @@
 #include "TrackProps.h"
 #include "wavefunctions.h"
 #include "Atlas.h"
+#include "GameMusic.h"
 #include "version.h"
 
 #if defined(linux) && !defined(_WIN32)
@@ -543,6 +544,8 @@ static long InitialiseData(void) {
 
 static void FreeData(void) {
     FreeTrackData();
+    if (IsAudioEnabled())
+        GameMusic_Shutdown();
     DSTerm();
 #if defined(DEBUG) || defined(_DEBUG)
     fclose(out);
@@ -1516,7 +1519,8 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
 
     DrawTrackMenuBrand(txtHelper, g_pFontDisplay, g_pFontScript, g_pSprite,
                        (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
-                       IsAmigaPhysicsUpgradeEnabled(), IsSpeedFeelEnabled(), GetTimeSeconds());
+                       IsAmigaPhysicsUpgradeEnabled(), IsSpeedFeelEnabled(), GameMusic_IsMenuMusicEnabled(),
+                       GetTimeSeconds());
 
     const bool goPrev = (keyPress == SDLK_LEFT || keyPress == SDLK_UP);
     const bool goNext = (keyPress == SDLK_RIGHT || keyPress == SDLK_DOWN);
@@ -2886,6 +2890,13 @@ bool process_events() {
                 keyPress = '\0';
                 break;
 
+            case SDLK_n:
+                if (GameMode == TRACK_MENU) {
+                    GameMusic_ToggleMenuMusic();
+                }
+                keyPress = '\0';
+                break;
+
             case SDLK_F6:
                 bPlayerPaused = !bPlayerPaused;
                 break;
@@ -3388,6 +3399,10 @@ static bool RunFrame(double frameTime, bool allowQuit) {
         const double interpolationResetDelta = 2.0 * g_physicsStepSeconds;  // e.g. ~2 physics steps
         if (GameMode != s_prevGameMode || frameDelta > interpolationResetDelta) {
             have_prev_car_state = false;
+            if (GameMode != s_prevGameMode) {
+                if (IsAudioEnabled())
+                    GameMusic_OnGameModeChanged(s_prevGameMode, GameMode);
+            }
             if (GameMode == TRACK_MENU && s_prevGameMode != TRACK_MENU)
                 ResetTrackMenuBrandMotion(frameTime);
             s_prevGameMode = GameMode;
@@ -3664,6 +3679,10 @@ static bool RunFrame(double frameTime, bool allowQuit) {
         g_baseLogicTicksInWindow = 0;
         g_timingWindowStart = frameTime;
     }
+
+    if (IsAudioEnabled())
+        GameMusic_Pump();
+
     return run;
 }
 
@@ -3995,6 +4014,7 @@ int main(int argc, const char** argv) {
     if (IsAudioEnabled()) {
         DSInit();
         DSSetMode();
+        GameMusic_Init();
     }
 
     /* Clear to sky colour so any unfilled pixels (e.g. right edge) match the backdrop */

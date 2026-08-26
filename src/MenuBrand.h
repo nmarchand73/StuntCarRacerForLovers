@@ -11,7 +11,7 @@ void ResetTrackPreviewBrandMotion(double timeSeconds);
 /** Draw the TRACK_MENU title composition (scrims, wordmark, track CTA, quiet toggles). */
 void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,
                         const wchar_t* trackName, const wchar_t* packName, bool superLeague, bool amigaPhysics,
-                        bool speedFeel, double timeSeconds);
+                        bool speedFeel, bool menuMusic, double timeSeconds);
 
 /** Draw the TRACK_PREVIEW setup composition (track hero, mode, opponent count, CTA). */
 void DrawTrackPreviewBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,
