@@ -23,13 +23,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Checkout psgplay (sparse)
+      - name: Checkout psgplay
         uses: actions/checkout@v5
         with:
-          repository: nmarchand73/retro-music-player
-          path: retro-music-player
-          sparse-checkout: tools/psgplay
-          sparse-checkout-cone-mode: true
+          repository: frno7/psgplay
+          path: retro-music-player/tools/psgplay
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -76,18 +74,16 @@ jobs:
             mingw-w64-ucrt-x86_64-cmake
             make
 
-      - name: Checkout psgplay (sparse)
+      - name: Checkout psgplay
         uses: actions/checkout@v5
         with:
-          repository: nmarchand73/retro-music-player
-          path: retro-music-player
-          sparse-checkout: tools/psgplay
-          sparse-checkout-cone-mode: true
+          repository: frno7/psgplay
+          path: retro-music-player/tools/psgplay
 
       - name: Build libpsgplay
+        working-directory: ${{ github.workspace }}
         run: |
           test -f retro-music-player/tools/psgplay/Makefile
-          ls -la retro-music-player/tools/psgplay
           make -C retro-music-player/tools/psgplay lib/psgplay/libpsgplay.a
 
       - name: Configure
