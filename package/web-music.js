@@ -32,7 +32,7 @@ const TRACKS = {
 };
 
 let ymReady = null;
-let menuMusicEnabled = true;
+let musicEnabled = true;
 let lastGameMode = GAME_MODE.TRACK_MENU;
 let pendingRetry = false;
 let retryTimer = null;
@@ -223,6 +223,9 @@ async function startOggTrack(spec) {
 }
 
 function trackKeyForMode(mode) {
+  if (!musicEnabled) {
+    return null;
+  }
   if (mode === GAME_MODE.GAME_IN_PROGRESS) {
     return 'race';
   }
@@ -231,7 +234,7 @@ function trackKeyForMode(mode) {
     mode === GAME_MODE.TRACK_PREVIEW ||
     mode === GAME_MODE.GAME_OVER
   ) {
-    return menuMusicEnabled ? 'menu' : null;
+    return 'menu';
   }
   return null;
 }
@@ -377,11 +380,11 @@ const SCRWebMusicImpl = {
   },
 
   _isMenuMusicEnabled() {
-    return menuMusicEnabled;
+    return musicEnabled;
   },
 
   setMenuMusicEnabled(enabled) {
-    menuMusicEnabled = !!enabled;
+    musicEnabled = !!enabled;
     void applyGameMode(lastGameMode);
   },
 

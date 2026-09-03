@@ -55,6 +55,8 @@ extern long VALUE1, VALUE2, VALUE3;
 extern void RequestRestartEngineAudioOnFirstInput(void);
 /** Global audio toggle (false in debug by default). */
 extern bool IsAudioEnabled(void);
+/** Engine sample playback; independent of music. */
+extern bool IsEngineSoundEnabled(void);
 /** True while a WebRTC guest is connected and host/guest audio channel split is active. */
 extern bool IsWebRTCGuestConnected(void);
 

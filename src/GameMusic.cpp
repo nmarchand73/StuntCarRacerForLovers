@@ -54,7 +54,7 @@ static std::deque<float> g_music_queue;
 static const float kMenuMusicGain = 0.35f;
 static const float kRaceMusicGain = 0.45f * 0.4f * 1.3f * 1.5f;
 static bool g_ready = false;
-static bool g_menu_music_enabled = true;
+static bool g_music_enabled = true;
 static GameModeType g_last_music_mode = TRACK_MENU;
 static float g_music_gain = kMenuMusicGain;
 
@@ -210,9 +210,13 @@ static bool StartRacePlaybackLocked() {
 }
 
 static void RestartCurrentTrackLocked() {
+    if (!g_music_enabled) {
+        StopPlaybackLocked();
+        return;
+    }
     if (g_last_music_mode == GAME_IN_PROGRESS) {
         StartRacePlaybackLocked();
-    } else if (g_menu_music_enabled) {
+    } else {
         StartMenuPlaybackLocked();
     }
 }
@@ -294,6 +298,11 @@ static void PumpLocked() {
 static void ApplyMusicForMode(GameModeType mode) {
     g_last_music_mode = mode;
 
+    if (!g_music_enabled) {
+        StopPlaybackLocked();
+        return;
+    }
+
     if (mode == GAME_IN_PROGRESS) {
         g_music_gain = kRaceMusicGain;
         if (!StartRacePlaybackLocked()) {
@@ -303,10 +312,6 @@ static void ApplyMusicForMode(GameModeType mode) {
     }
 
     if (mode == TRACK_MENU || mode == TRACK_PREVIEW || mode == GAME_OVER) {
-        if (!g_menu_music_enabled) {
-            StopPlaybackLocked();
-            return;
-        }
         g_music_gain = kMenuMusicGain;
         if (!StartMenuPlaybackLocked()) {
             printf("GameMusic: menu music unavailable\n");
@@ -396,16 +401,16 @@ void GameMusic_OnGameModeChanged(GameModeType prev, GameModeType next) {
     SDL_UnlockMutex(g_music_mutex);
 }
 
-bool GameMusic_IsMenuMusicEnabled(void) {
-    return g_menu_music_enabled;
+bool GameMusic_IsEnabled(void) {
+    return g_music_enabled;
 }
 
-void GameMusic_SetMenuMusicEnabled(bool enabled) {
-    if (g_menu_music_enabled == enabled) {
+void GameMusic_SetEnabled(bool enabled) {
+    if (g_music_enabled == enabled) {
         return;
     }
 
-    g_menu_music_enabled = enabled;
+    g_music_enabled = enabled;
     if (!g_ready || !g_music_mutex) {
         return;
     }
@@ -414,15 +419,15 @@ void GameMusic_SetMenuMusicEnabled(bool enabled) {
     if (enabled) {
         ApplyMusicForMode(g_last_music_mode);
         PumpLocked();
-    } else if (g_last_music_mode != GAME_IN_PROGRESS) {
+    } else {
         StopPlaybackLocked();
     }
     SDL_UnlockMutex(g_music_mutex);
-    printf("Menu music: %s\n", enabled ? "On" : "Off");
+    printf("Music: %s\n", enabled ? "On" : "Off");
 }
 
-void GameMusic_ToggleMenuMusic(void) {
-    GameMusic_SetMenuMusicEnabled(!g_menu_music_enabled);
+void GameMusic_Toggle(void) {
+    GameMusic_SetEnabled(!g_music_enabled);
 }
 
 void GameMusic_Mix(float* out, int frame_count, int channels) {
@@ -503,16 +508,16 @@ void GameMusic_OnGameModeChanged(GameModeType prev, GameModeType next) {
     js_web_music_set_mode(static_cast<int>(next));
 }
 
-bool GameMusic_IsMenuMusicEnabled(void) {
+bool GameMusic_IsEnabled(void) {
     return js_web_music_is_menu_enabled() != 0;
 }
 
-void GameMusic_SetMenuMusicEnabled(bool enabled) {
+void GameMusic_SetEnabled(bool enabled) {
     js_web_music_set_menu_enabled(enabled ? 1 : 0);
 }
 
-void GameMusic_ToggleMenuMusic(void) {
-    GameMusic_SetMenuMusicEnabled(!GameMusic_IsMenuMusicEnabled());
+void GameMusic_Toggle(void) {
+    GameMusic_SetEnabled(!GameMusic_IsEnabled());
 }
 
 #else /* native build without psgplay */
@@ -525,15 +530,15 @@ void GameMusic_OnGameModeChanged(GameModeType prev, GameModeType next) {
     (void)next;
 }
 
-bool GameMusic_IsMenuMusicEnabled(void) {
+bool GameMusic_IsEnabled(void) {
     return true;
 }
 
-void GameMusic_SetMenuMusicEnabled(bool enabled) {
+void GameMusic_SetEnabled(bool enabled) {
     (void)enabled;
 }
 
-void GameMusic_ToggleMenuMusic(void) {}
+void GameMusic_Toggle(void) {}
 
 #endif /* __EMSCRIPTEN__ */
 #endif /* STUNT_PSGPLAY_MUSIC */

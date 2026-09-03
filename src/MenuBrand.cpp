@@ -225,7 +225,7 @@ void ResetTrackPreviewBrandMotion(double timeSeconds) {
 
 void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,
                         const wchar_t* trackName, const wchar_t* packName, bool superLeague, bool amigaPhysics,
-                        bool speedFeel, bool menuMusic, long classicDivision, double timeSeconds) {
+                        bool speedFeel, bool musicOn, bool engineOn, long classicDivision, double timeSeconds) {
     const float W = static_cast<float>(MenuProjectionWidth());
     const float H = 480.0f;
 
@@ -305,8 +305,8 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
     {
         std::wstringstream ss;
         ss << L"Physics " << (amigaPhysics ? L"Amiga+" : L"Classic") << L" [U]  |  Speed "
-           << (speedFeel ? L"On" : L"Off") << L" [I]  |  Music " << (menuMusic ? L"On" : L"Off")
-           << L" [N]  |  League [L]";
+           << (speedFeel ? L"On" : L"Off") << L" [I]  |  Music " << (musicOn ? L"On" : L"Off")
+           << L" [N]  |  Engine " << (engineOn ? L"On" : L"Off") << L" [E]  |  League [L]";
         DrawCenteredShadow(bodyText, ss.str(), 446, 0.58f, 0.52f, 0.54f, 0.82f, 1);
     }
 }
@@ -390,7 +390,8 @@ void DrawTrackPreviewBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font
     DrawCenteredShadow(title, L"ENTER  -  RACE", 372, 0.98f, 0.78f, 0.35f, 0.55f + 0.45f * pulse, 1);
 
     bodyText.SetDisplaySize(12);
-    DrawCenteredShadow(bodyText, L"M / Esc back   |   F4 scenery", 400, 0.70f, 0.66f, 0.68f, 0.9f, 1);
+    DrawCenteredShadow(bodyText, L"M / Esc back   |   F4 scenery   |   N music   E engine", 400, 0.70f, 0.66f, 0.68f,
+                       0.9f, 1);
 
     bodyText.SetDisplaySize(11);
     DrawCenteredShadow(bodyText, L"Steer  Accel  Brake  Boost  |  P pause  R reverse", 430, 0.55f, 0.52f, 0.54f, 0.82f,

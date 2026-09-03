@@ -141,6 +141,15 @@ bool IsAudioEnabled(void) {
     return kEnableAudioInDebug;
 }
 
+static bool g_engineSoundEnabled = true;
+static void RestartEngineAudioBuffers(bool resetEngineModel);
+
+bool IsEngineSoundEnabled(void) {
+    return g_engineSoundEnabled;
+}
+
+static void ApplyEngineSoundEnabled(bool enabled);
+
 bool IsWebRTCGuestConnected(void) {
 #ifdef __EMSCRIPTEN__
     return g_webrtcGuestConnected;
@@ -220,6 +229,8 @@ static bool g_splitScreenHorizontal = true;
 static double g_physicsHudFlashUntil = 0.0;
 static double g_speedFeelHudFlashUntil = 0.0;
 static double g_aestheticsHudFlashUntil = 0.0;
+static double g_musicHudFlashUntil = 0.0;
+static double g_engineHudFlashUntil = 0.0;
 
 static bool IsSplitScreenMode(void) {
     return bMultiplayerMode || bFauxMultiplayerMode;
@@ -1316,6 +1327,23 @@ static void RestartEngineAudioBuffers(bool resetEngineModel) {
     }
 }
 
+static void ApplyEngineSoundEnabled(bool enabled) {
+    g_engineSoundEnabled = enabled;
+    if (enabled)
+        return;
+    RestartEngineAudioBuffers(false);
+    if (IsSplitScreenMode()) {
+        const long prev0 = PushCarBehaviourInstance(0);
+        SilenceEnginePlaybackKeepRevs();
+        PopCarBehaviourInstance(prev0);
+        const long prev1 = PushCarBehaviourInstance(1);
+        SilenceEnginePlaybackKeepRevs();
+        PopCarBehaviourInstance(prev1);
+    } else {
+        SilenceEnginePlaybackKeepRevs();
+    }
+}
+
 void RequestRestartEngineAudioOnFirstInput(void) {
     g_restartEngineAudioOnFirstInput = true;
 }
@@ -1525,8 +1553,8 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
 
     DrawTrackMenuBrand(txtHelper, g_pFontDisplay, g_pFontScript, g_pSprite,
                        (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
-                       IsAmigaPhysicsUpgradeEnabled(), IsSpeedFeelEnabled(), GameMusic_IsMenuMusicEnabled(),
-                       GetClassicDivisionNumber(TrackID), GetTimeSeconds());
+                       IsAmigaPhysicsUpgradeEnabled(), IsSpeedFeelEnabled(), GameMusic_IsEnabled(),
+                       IsEngineSoundEnabled(), GetClassicDivisionNumber(TrackID), GetTimeSeconds());
 
     const bool goPrev = (keyPress == SDLK_LEFT || keyPress == SDLK_UP);
     const bool goNext = (keyPress == SDLK_RIGHT || keyPress == SDLK_DOWN);
@@ -2045,6 +2073,16 @@ void RenderText(double fTime) {
             txtHelper.SetForegroundColor(glm::vec4(1.0f, 1.0f, 0.85f, 1.0f));
             DrawCenteredTextLine(txtHelper, lookSs.str(), static_cast<int>(480.0f - 48.0f * textScale));
         }
+        if (GetTimeSeconds() < g_musicHudFlashUntil) {
+            std::wstringstream ss;
+            ss << L"Music: " << (GameMusic_IsEnabled() ? L"On" : L"Off");
+            DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>(40 * textScale));
+        }
+        if (GetTimeSeconds() < g_engineHudFlashUntil) {
+            std::wstringstream ss;
+            ss << L"Engine: " << (IsEngineSoundEnabled() ? L"On" : L"Off");
+            DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>((40 + 18) * textScale));
+        }
         txtHelper.End();
         break;
 
@@ -2090,6 +2128,16 @@ void RenderText(double fTime) {
             std::wstringstream ss;
             ss << L"Look: " << (IsAestheticsFeelEnabled() ? L"Enhanced" : L"Classic");
             DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>((40 + 36) * textScale));
+        }
+        if (GetTimeSeconds() < g_musicHudFlashUntil) {
+            std::wstringstream ss;
+            ss << L"Music: " << (GameMusic_IsEnabled() ? L"On" : L"Off");
+            DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>((40 + 54) * textScale));
+        }
+        if (GetTimeSeconds() < g_engineHudFlashUntil) {
+            std::wstringstream ss;
+            ss << L"Engine: " << (IsEngineSoundEnabled() ? L"On" : L"Off");
+            DrawCenteredTextLine(txtHelper, ss.str(), static_cast<int>((40 + 72) * textScale));
         }
 
         txtHelper.End();
@@ -2901,9 +2949,14 @@ bool process_events() {
                 break;
 
             case SDLK_n:
-                if (GameMode == TRACK_MENU) {
-                    GameMusic_ToggleMenuMusic();
-                }
+                GameMusic_Toggle();
+                g_musicHudFlashUntil = GetTimeSeconds() + 2.0;
+                keyPress = '\0';
+                break;
+
+            case SDLK_e:
+                ApplyEngineSoundEnabled(!g_engineSoundEnabled);
+                g_engineHudFlashUntil = GetTimeSeconds() + 2.0;
                 keyPress = '\0';
                 break;
 

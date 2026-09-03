@@ -12,7 +12,7 @@ void ResetTrackPreviewBrandMotion(double timeSeconds);
  *  classicDivision is 1–4 for Classic pack Amiga divisions, or 0 when not applicable. */
 void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,
                         const wchar_t* trackName, const wchar_t* packName, bool superLeague, bool amigaPhysics,
-                        bool speedFeel, bool menuMusic, long classicDivision, double timeSeconds);
+                        bool speedFeel, bool musicOn, bool engineOn, long classicDivision, double timeSeconds);
 
 /** Draw the TRACK_PREVIEW setup composition (track hero, mode, opponent count, CTA). */
 void DrawTrackPreviewBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,

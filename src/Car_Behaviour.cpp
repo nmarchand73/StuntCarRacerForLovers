@@ -4217,6 +4217,13 @@ void CarBehaviour(DWORD input, long* x, long* y, long* z, long* x_angle, long* y
 #undef CAR_BEHAVIOUR_STATE_FIELDS
 #undef CAR_BEHAVIOUR_OPTIONAL_AMIGA_FIELDS
 
+void SilenceEnginePlaybackKeepRevs(void) {
+    engineSoundPlaying = FALSE;
+    lastEngineSoundIndex = -1;
+    pendingEngineSoundIndex = -1;
+    pendingEngineSoundIndexCount = 0;
+}
+
 void ResetEngineAudioState(void) {
     engineRevs = 0;
     engineRevsChange = 0;
@@ -4474,10 +4481,15 @@ fwe3    move.w    sprite.DMA.value,dmacon+custom
         pendingEngineSoundIndexCount = 0;
     }
 
-    const bool audioEnabled = IsAudioEnabled() && (engineSoundBuffers != NULL);
+    const bool audioEnabled = IsAudioEnabled() && IsEngineSoundEnabled() && (engineSoundBuffers != NULL);
     const bool currentBufferReady = audioEnabled && (engineSoundBuffers[engineSoundIndex] != NULL);
 
-    if (engineSoundIndex != lastEngineSoundIndex) {
+    if (!IsEngineSoundEnabled()) {
+        if (engineSoundBuffers && lastEngineSoundIndex >= 0 && engineSoundBuffers[lastEngineSoundIndex]) {
+            engineSoundBuffers[lastEngineSoundIndex]->Stop();
+        }
+        SilenceEnginePlaybackKeepRevs();
+    } else if (engineSoundIndex != lastEngineSoundIndex) {
         // Stop the old engine sound
         if (audioEnabled && lastEngineSoundIndex >= 0 && engineSoundBuffers[lastEngineSoundIndex]) {
             engineSoundBuffers[lastEngineSoundIndex]->Stop();

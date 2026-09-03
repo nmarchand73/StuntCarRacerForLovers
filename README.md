@@ -99,7 +99,8 @@ Visual bumps and border wear do **not** change physics — only how the track re
 | <kbd>U</kbd> | Amiga+ physics | On |
 | <kbd>I</kbd> | Speed feel | On |
 | <kbd>O</kbd> | Enhanced Look | On |
-| <kbd>N</kbd> | Menu music on/off | On |
+| <kbd>N</kbd> | Music on/off (all screens) | On |
+| <kbd>E</kbd> | Engine sound on/off | On |
 | <kbd>P</kbd> | Pause | — |
 | <kbd>F11</kbd> / <kbd>⌘↩</kbd> / <kbd>Alt+Enter</kbd> | Fullscreen | — |
 | <kbd>F4</kbd> | Cycle scenery type | — |

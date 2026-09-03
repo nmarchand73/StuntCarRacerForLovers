@@ -80,6 +80,7 @@ extern void FramesWheelsEngineSubstep(IDirectSoundBuffer8* engineSoundBuffers[],
                                       float pitchScale = 1.0f);
 extern void StepEngineAudioStateSubstep(int substeps_per_logic);
 extern void EngineSoundStopped(void);
+extern void SilenceEnginePlaybackKeepRevs(void);
 extern void ResetEngineAudioState(void);
 extern void PrimeEngineAudioForGameplayStart(void);
 
