@@ -14,6 +14,9 @@
 #include "3D_Engine.h"
 #include "Atlas.h"
 #include "AestheticsFeel.h"
+#include "Car_Behaviour.h"
+#include "Opponent_Behaviour.h"
+#include "Track.h"
 /*    ===== */
 /*    Debug */
 /*    ===== */
@@ -29,6 +32,9 @@ extern FILE* out;
 extern bool bSuperLeague;
 extern int wideScreen;
 extern bool bPaused;
+extern GameModeType GameMode;
+extern long NumTrackPieces;
+extern long StartLinePiece;
 
 /*    =========== */
 /*    Static data */
@@ -260,13 +266,15 @@ struct TRANSFORMEDCOLVERTEX {
 };
 #define FVF_TRANSFORMEDCOLVERTEX (FVF_XYZRHW | FVF_DIFFUSE)
 
-static VertexBuffer *pCockpitVB = NULL, *pSpeedBarCB = NULL;
+static VertexBuffer *pCockpitVB = NULL, *pSpeedBarCB = NULL, *pHudIconVB = NULL;
 #define MAX_COCKIPTVB 512
 static int old_speedbar = -1;
 static int old_leftwheel = -1, old_rightwheel = -1;
 
 extern GpuTexture* g_pAtlas;
 extern GpuTexture* g_pCockpitAtlas;
+static GpuTexture* g_pHudFlagBright = NULL;
+static GpuTexture* g_pHudWatchBright = NULL;
 extern long front_left_amount_below_road, front_right_amount_below_road;
 extern long leftwheel_angle, rightwheel_angle;
 extern long boost_activated;
@@ -288,6 +296,13 @@ HRESULT CreateCockpitVertexBuffer(RenderDevice* pDevice) {
             return E_FAIL;
         }
     }
+    if (pHudIconVB == NULL) {
+        if (FAILED(pDevice->CreateVertexBuffer(12 * sizeof(TRANSFORMEDTEXVERTEX), VB_USAGE_WRITEONLY,
+                                               FVF_TRANSFORMEDTEXVERTEX, POOL_DEFAULT, &pHudIconVB, NULL))) {
+            OutputDebugStringW(L"ERROR: Failed to create HUD icon vertex buffer\n");
+            return E_FAIL;
+        }
+    }
     return S_OK;
 }
 
@@ -296,11 +311,107 @@ void FreeCockpitVertexBuffer(void) {
         pCockpitVB->Release(), pCockpitVB = NULL;
     if (pSpeedBarCB)
         pSpeedBarCB->Release(), pSpeedBarCB = NULL;
+    if (pHudIconVB)
+        pHudIconVB->Release(), pHudIconVB = NULL;
+    if (g_pHudFlagBright) {
+        delete g_pHudFlagBright;
+        g_pHudFlagBright = NULL;
+    }
+    if (g_pHudWatchBright) {
+        delete g_pHudWatchBright;
+        g_pHudWatchBright = NULL;
+    }
     /*if (pLeftwheelVB) pLeftwheelVB->Release(), pLeftwheelVB = NULL;
     if (pRightwheelVB) pRightwheelVB->Release(), pRightwheelVB = NULL;*/
 }
 
 extern long CalculateDisplaySpeed(void);
+
+/* Amiga graphic.info: chequered flag / stop watch at y=190, 16x8; bright overlays when lit. */
+static void FillHudIconQuad(TRANSFORMEDTEXVERTEX* v, float x1, float y1, float x2, float y2) {
+    /* Texture upload flips rows; v=0 at top of sprite file after that flip. */
+    v[0] = {x1, y1, 0.95f, 1.0f, 0.0f, 0.0f};
+    v[1] = {x2, y1, 0.95f, 1.0f, 1.0f, 0.0f};
+    v[2] = {x2, y2, 0.95f, 1.0f, 1.0f, 1.0f};
+    v[3] = {x1, y1, 0.95f, 1.0f, 0.0f, 0.0f};
+    v[4] = {x2, y2, 0.95f, 1.0f, 1.0f, 1.0f};
+    v[5] = {x1, y2, 0.95f, 1.0f, 0.0f, 1.0f};
+}
+
+static void EnsureHudIconTextures(void) {
+    if (!g_pHudFlagBright) {
+        g_pHudFlagBright = new GpuTexture();
+        g_pHudFlagBright->LoadTexture("data/Bitmap/hud_flag_bright.png");
+    }
+    if (!g_pHudWatchBright) {
+        g_pHudWatchBright = new GpuTexture();
+        g_pHudWatchBright->LoadTexture("data/Bitmap/hud_watch_bright.png");
+    }
+}
+
+static void DrawHudStatusIcons(RenderDevice* pDevice, float widePixels, float offsetX) {
+    if (GameMode != GAME_IN_PROGRESS || pHudIconVB == NULL)
+        return;
+
+    EnsureHudIconTextures();
+
+    const long startFinishPiece = (StartLinePiece + 1 < NumTrackPieces) ? (StartLinePiece + 1) : 0;
+    const bool flagBright = CalculateIfWinning(startFinishPiece) < 0; /* Amiga copy.chequered.flag */
+    const bool watchBright = IsBestLapTimePlayers();                 /* Amiga B.1bbb2 / copy.stop.watch0 */
+
+    if (!flagBright && !watchBright)
+        return;
+
+    /* Amiga graphic.info: flag x-word 6 → px 96; stopwatch x-word 13 → px 208; both y=190, 16×8. */
+    const float iconY1 = 190.0f * 2.4f;
+    const float iconY2 = iconY1 + 8.0f * 2.4f;
+    const float flagX1 = widePixels + 96.0f * 2.0f + offsetX;
+    const float flagX2 = flagX1 + 32.0f;
+    const float watchX1 = widePixels + 208.0f * 2.0f + offsetX;
+    const float watchX2 = watchX1 + 32.0f;
+
+    TRANSFORMEDTEXVERTEX* pVerts = NULL;
+    if (FAILED(pHudIconVB->Lock(0, 0, (void**)&pVerts, 0)))
+        return;
+
+    int triCount = 0;
+    if (flagBright) {
+        FillHudIconQuad(pVerts + triCount * 3, flagX1, iconY1, flagX2, iconY2);
+        triCount += 2;
+    }
+    if (watchBright) {
+        FillHudIconQuad(pVerts + triCount * 3, watchX1, iconY1, watchX2, iconY2);
+        triCount += 2;
+    }
+    pHudIconVB->Unlock();
+
+    pDevice->SetRenderState(RS_ZENABLE, FALSE);
+    pDevice->SetRenderState(RS_ALPHABLENDENABLE, TRUE);
+    pDevice->SetRenderState(RS_SRCBLEND, BLEND_SRCALPHA);
+    pDevice->SetRenderState(RS_DESTBLEND, BLEND_INVSRCALPHA);
+    pDevice->SetTextureStageState(0, TSS_COLOROP, TOP_SELECTARG1);
+    pDevice->SetTextureStageState(0, TSS_COLORARG1, TA_TEXTURE);
+    pDevice->SetTextureStageState(0, TSS_ALPHAOP, TOP_SELECTARG1);
+    pDevice->SetTextureStageState(0, TSS_ALPHAARG1, TA_TEXTURE);
+    pDevice->SetStreamSource(0, pHudIconVB, 0, sizeof(TRANSFORMEDTEXVERTEX));
+    pDevice->SetFVF(FVF_TRANSFORMEDTEXVERTEX);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    int drawnTris = 0;
+    if (flagBright) {
+        pDevice->SetTexture(0, g_pHudFlagBright);
+        pDevice->DrawPrimitive(PT_TRIANGLELIST, 0, 2);
+        drawnTris = 2;
+    }
+    if (watchBright) {
+        pDevice->SetTexture(0, g_pHudWatchBright);
+        pDevice->DrawPrimitive(PT_TRIANGLELIST, drawnTris * 3, 2);
+    }
+
+    pDevice->SetRenderState(RS_ALPHABLENDENABLE, FALSE);
+    pDevice->SetRenderState(RS_ZENABLE, TRUE);
+}
 
 static int cockpit_vtx = 0;
 static float g_cockpitAtlasUOffset = 0.0f;
@@ -630,6 +741,9 @@ void DrawCockpit(RenderDevice* pDevice) {
 
     pDevice->SetFVF(FVF_TRANSFORMEDCOLVERTEX);
     pDevice->DrawPrimitive(PT_TRIANGLEFAN, 0, 2); // 3 points per triangle
+
+    /* Amiga copy.chequered.flag / copy.stop.watch — bright overlays when lit. */
+    DrawHudStatusIcons(pDevice, Wide * 2.0f, offsetX);
 
     // Restore default filtering for non-cockpit atlas usage.
     pDevice->SetTexture(0, g_pAtlas);

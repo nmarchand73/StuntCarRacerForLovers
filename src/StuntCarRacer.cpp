@@ -1946,39 +1946,59 @@ static void DrawGameplayCockpitHud(TextHelper& txtHelper, long lapValue, long op
     glGetIntegerv(GL_VIEWPORT, vp);
     float projWidth = (vp[3] > 0) ? (480.0f * static_cast<float>(vp[2]) / static_cast<float>(vp[3])) : base_width;
     float cockpitOffsetX = (projWidth - base_width) * 0.5f;
+    const float wideHudPad = wideScreen ? 80.0f : 0.0f;
+    const int topY = static_cast<int>(BASE_HEIGHT - 48.0f);
+    const int bottomY = static_cast<int>(BASE_HEIGHT - 25.0f);
+
+    /* Amiga cockpit.png gray panels (*2 → 640 space): left 72..170, right 468..566. */
+    const float leftBoxCenterX =
+        0.5f * ((72.0f + wideHudPad) + (170.0f + wideHudPad)) * textScale + cockpitOffsetX;
+    const float rightBoxCenterX =
+        0.5f * ((468.0f + wideHudPad) + (566.0f + wideHudPad)) * textScale + cockpitOffsetX;
 
     txtHelper.SetForegroundColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-    // Left top: lap + boost (Amiga print.lap.boost.text)
-    txtHelper.SetInsertionPos(static_cast<int>((88 + (wideScreen ? 80 : 0)) * textScale + cockpitOffsetX),
-                              static_cast<int>(BASE_HEIGHT - 48.0f));
+    // Left top: L# + B## (manual / print.lap.boost.text + boost.print)
     {
         std::wstringstream ss;
-        ss << L"L" << lapText << L"       B" << std::setw(2) << std::setfill(L'0')
+        ss << L"L" << lapText << L"  B" << std::setw(2) << std::setfill(L'0')
            << FormatBoostReserveForHud(boostReserve);
-        txtHelper.DrawFormattedTextLine(ss.str());
+        const std::wstring line = ss.str();
+        const int textW = txtHelper.MeasureTextWidth(line.c_str());
+        txtHelper.SetInsertionPos(static_cast<int>(leftBoxCenterX - 0.5f * textW + 0.5f), topY);
+        txtHelper.DrawFormattedTextLine(line);
     }
 
-    // Left bottom: separation from opponent
-    txtHelper.SetInsertionPos(static_cast<int>((84 + (wideScreen ? 80 : 0)) * textScale + cockpitOffsetX),
-                              static_cast<int>(BASE_HEIGHT - 25.0f));
+    // Left bottom: separation metres (Amiga display.opponents.distance).
+    // Manual: '-' = ahead, no sign = behind. Never '+'. Four digits after the sign/space.
     {
-        std::wstringstream ss;
-        ss << L"        " << std::showpos << std::setw(5) << std::setfill(L'0') << opponentsDistance;
-        txtHelper.DrawFormattedTextLine(ss.str());
+        long metres = opponentsDistance;
+        wchar_t sign = L' ';
+        if (metres < 0) {
+            sign = L'-';
+            metres = -metres;
+        }
+        if (metres > 9999)
+            metres = 9999;
+        WCHAR sepText[8];
+        sepText[0] = sign;
+        swprintf(sepText + 1, 7, L"%04ld", metres);
+        const int textW = txtHelper.MeasureTextWidth(sepText);
+        txtHelper.SetInsertionPos(static_cast<int>(leftBoxCenterX - 0.5f * textW + 0.5f), bottomY);
+        txtHelper.DrawFormattedTextLine(sepText);
     }
 
-    // Right top: current lap time (Amiga print.lap.time column 34 / row 22)
-    // Right bottom: best lap time (yours or opponent's)
-    const int rightX = static_cast<int>((520 + (wideScreen ? 80 : 0)) * textScale + cockpitOffsetX);
+    // Right top/bottom: current lap / best lap (manual Lap Time/Stopwatch, M:SS.HH).
     WCHAR currentLapTime[16];
     WCHAR bestLapTime[16];
     if (FormatCurrentLapTimeForHud(currentLapTime, 16)) {
-        txtHelper.SetInsertionPos(rightX, static_cast<int>(BASE_HEIGHT - 48.0f));
+        const int textW = txtHelper.MeasureTextWidth(currentLapTime);
+        txtHelper.SetInsertionPos(static_cast<int>(rightBoxCenterX - 0.5f * textW + 0.5f), topY);
         txtHelper.DrawFormattedTextLine(currentLapTime);
     }
     if (FormatBestLapTimeForHud(bestLapTime, 16)) {
-        txtHelper.SetInsertionPos(rightX, static_cast<int>(BASE_HEIGHT - 25.0f));
+        const int textW = txtHelper.MeasureTextWidth(bestLapTime);
+        txtHelper.SetInsertionPos(static_cast<int>(rightBoxCenterX - 0.5f * textW + 0.5f), bottomY);
         txtHelper.DrawFormattedTextLine(bestLapTime);
     }
 }

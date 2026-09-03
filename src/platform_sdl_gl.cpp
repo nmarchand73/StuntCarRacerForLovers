@@ -67,7 +67,7 @@ void GpuTexture::LoadTexture(const char* name) {
     // Use fmt for internal format: WebGL only allows GL_RGB/GL_RGBA/GL_ALPHA/GL_LUMINANCE/GL_LUMINANCE_ALPHA
     glTexImage2D(GL_TEXTURE_2D, 0, fmt, w2, h2, 0, fmt, GL_UNSIGNED_BYTE, NULL);
     // simple and hugly way to make the texture upside down...
-    int pitch = y * n;
+    const int pitch = x * n;
     for (int i = 0; i < h; i++) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, (h - 1) - i, w, 1, fmt, GL_UNSIGNED_BYTE, img + (pitch * i));
     }
