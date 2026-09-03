@@ -82,8 +82,8 @@ extern bool bTestKey;
 
 #define ROAD_WIDTH 0x0180
 
-#define SURFACE_SIZE 1024   // used when interpolating (Amiga StuntCarRacer used 256, but 1024 is smoother!)
-#define LOG_SURFACE_SIZE 10 // to base 2
+#define SURFACE_SIZE 256 // Amiga StuntCarRacer surface factor
+#define LOG_SURFACE_SIZE 8 // to base 2
 
 #define OFF_ROAD_HEIGHT 0x1000
 

@@ -2,66 +2,38 @@
 
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
-
-#ifndef SCR_AMIGA_PHYSICS_DEFAULT_ON
-/* Parity harness PASS + audit complete — default Amiga+ ON; Classic via P or SCR_AMIGA_PHYSICS=0. */
-#define SCR_AMIGA_PHYSICS_DEFAULT_ON 1
-#endif
-
-static bool g_amigaPhysicsUpgradeEnabled = (SCR_AMIGA_PHYSICS_DEFAULT_ON != 0);
-
-static void InitDefaultFromEnv(void) {
-    static bool done = false;
-    if (done)
-        return;
-    done = true;
-    const char* env = std::getenv("SCR_AMIGA_PHYSICS");
-    if (!env)
-        return;
-    if (env[0] == '1' && env[1] == '\0')
-        g_amigaPhysicsUpgradeEnabled = true;
-    else if (env[0] == '0' && env[1] == '\0')
-        g_amigaPhysicsUpgradeEnabled = false;
-}
 
 bool IsAmigaPhysicsUpgradeEnabled(void) {
-    InitDefaultFromEnv();
-    return g_amigaPhysicsUpgradeEnabled;
+    return true;
 }
 
-void SetAmigaPhysicsUpgradeEnabled(bool enabled) {
-    InitDefaultFromEnv();
-    g_amigaPhysicsUpgradeEnabled = enabled;
+void SetAmigaPhysicsUpgradeEnabled(bool /*enabled*/) {
+    /* Amiga settings are locked on; Classic remake springs retired. */
     std::printf("Physics profile: %s\n", GetPhysicsProfileId());
 }
 
 void ToggleAmigaPhysicsUpgrade(void) {
-    SetAmigaPhysicsUpgradeEnabled(!IsAmigaPhysicsUpgradeEnabled());
+    SetAmigaPhysicsUpgradeEnabled(true);
 }
 
 const char* GetPhysicsProfileId(void) {
-    return IsAmigaPhysicsUpgradeEnabled() ? "amiga-plus-v1" : "classic";
+    return "amiga";
 }
 
 long GetActiveFrontSpring(void) {
-    return IsAmigaPhysicsUpgradeEnabled() ? AMIGA_PLUS_FRONT_SUSPENSION_SPRING
-                                          : CLASSIC_FRONT_SUSPENSION_SPRING;
+    return AMIGA_PLUS_FRONT_SUSPENSION_SPRING;
 }
 
 long GetActiveFrontDamping(void) {
-    return IsAmigaPhysicsUpgradeEnabled() ? AMIGA_PLUS_FRONT_SUSPENSION_DAMPING
-                                          : CLASSIC_FRONT_SUSPENSION_DAMPING;
+    return AMIGA_PLUS_FRONT_SUSPENSION_DAMPING;
 }
 
 long GetActiveRearSpring(void) {
-    return IsAmigaPhysicsUpgradeEnabled() ? AMIGA_PLUS_REAR_SUSPENSION_SPRING
-                                         : CLASSIC_REAR_SUSPENSION_SPRING;
+    return AMIGA_PLUS_REAR_SUSPENSION_SPRING;
 }
 
 long GetActiveRearDamping(void) {
-    return IsAmigaPhysicsUpgradeEnabled() ? AMIGA_PLUS_REAR_SUSPENSION_DAMPING
-                                          : CLASSIC_REAR_SUSPENSION_DAMPING;
+    return AMIGA_PLUS_REAR_SUSPENSION_DAMPING;
 }
 
 long GetAmigaPlusFrameRateMultiplier(void) {
@@ -73,15 +45,13 @@ long GetAmigaPlusFrameRateMultiplier(void) {
 }
 
 long GetActiveImpactSoundCooldown(void) {
-    if (IsAmigaPhysicsUpgradeEnabled())
-        return AMIGA_PLUS_IMPACT_SOUND_COOLDOWN_BASE * GetAmigaPlusFrameRateMultiplier();
-    return CLASSIC_IMPACT_SOUND_COOLDOWN;
+    return AMIGA_PLUS_IMPACT_SOUND_COOLDOWN_BASE * GetAmigaPlusFrameRateMultiplier();
 }
 
 bool AmigaPlusDisablesDeltaSlewClamp(void) {
-    return IsAmigaPhysicsUpgradeEnabled();
+    return true;
 }
 
 bool AmigaPlusUsesAirGroundAngularDamping(void) {
-    return IsAmigaPhysicsUpgradeEnabled();
+    return true;
 }

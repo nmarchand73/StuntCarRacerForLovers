@@ -2,17 +2,10 @@
 #define _PHYSICS_CONFIG
 
 /**
- * Dual physics profiles for Multi Stunt Car.
+ * Amiga physics settings (calculate.difference / Vesuri).
  *
- * Classic  — frozen remake feel (springs 320 / damping 200).
- * Amiga+   — exact Amiga/Vesuri constants (276 / 256, Vesuri rate scaling).
- *
- * $0114 in Vesuri applyMomentumAmplification IS decimal 276 (calculate.difference).
- * Remake Amiga+ uses spring/g_physicsStepScale which equals Vesuri's
- * (276 * FRAMERATE_MULTIPLIER) when FRAMERATE_MULTIPLIER = 1/g_physicsStepScale.
- *
- * Default Amiga+ is ON after parity harness + audit sign-off; toggle with U
- * (P is pause). Override via SCR_AMIGA_PHYSICS=0/1 or SetAmigaPhysicsUpgradeEnabled.
+ * Springs 276 ($0114), damping 256, Vesuri rate scaling via g_physicsStepScale.
+ * Classic remake springs (320/200) are retired — getters always return Amiga values.
  */
 
 #ifndef PHYSICS_UPDATE_HZ
@@ -22,30 +15,28 @@
 /** Reference timestep (seconds) the Classic remake integrator was tuned for (~7.14 Hz). */
 #define PHYSICS_REFERENCE_STEP_SECONDS 0.14
 
-/* ----- Classic (frozen remake) ----- */
-#define CLASSIC_FRONT_SUSPENSION_SPRING 320
-#define CLASSIC_FRONT_SUSPENSION_DAMPING 200
-#define CLASSIC_REAR_SUSPENSION_SPRING 320
-#define CLASSIC_REAR_SUSPENSION_DAMPING 200
-#define CLASSIC_IMPACT_SOUND_COOLDOWN 5
-
-/* ----- Amiga+ (calculate.difference / Vesuri applyMomentumAmplification) ----- */
+/* Amiga calculate.difference / Vesuri applyMomentumAmplification */
 #define AMIGA_PLUS_FRONT_SUSPENSION_SPRING 276 /* $0114 */
 #define AMIGA_PLUS_FRONT_SUSPENSION_DAMPING 256
 #define AMIGA_PLUS_REAR_SUSPENSION_SPRING 276
 #define AMIGA_PLUS_REAR_SUSPENSION_DAMPING 256
 #define AMIGA_PLUS_IMPACT_SOUND_COOLDOWN_BASE 5 /* Vesuri: $05 * FRAMERATE_MULTIPLIER */
 
-/* Wall contact (identical both profiles; Amiga uses +/-8) */
+/* Legacy aliases — same Amiga values (Classic 320/200 retired). */
+#define CLASSIC_FRONT_SUSPENSION_SPRING AMIGA_PLUS_FRONT_SUSPENSION_SPRING
+#define CLASSIC_FRONT_SUSPENSION_DAMPING AMIGA_PLUS_FRONT_SUSPENSION_DAMPING
+#define CLASSIC_REAR_SUSPENSION_SPRING AMIGA_PLUS_REAR_SUSPENSION_SPRING
+#define CLASSIC_REAR_SUSPENSION_DAMPING AMIGA_PLUS_REAR_SUSPENSION_DAMPING
+#define CLASSIC_IMPACT_SOUND_COOLDOWN AMIGA_PLUS_IMPACT_SOUND_COOLDOWN_BASE
+
+/* Wall contact (Amiga uses +/-8) */
 #define WALL_CONTACT_IMPULSE 8
 #define WALL_CONTACT_DAMPING 4
 
-/* Back-compat macros: resolve to Classic compile-time defaults for any
- * residual direct use; runtime code must call the getters below. */
-#define FRONT_SUSPENSION_SPRING CLASSIC_FRONT_SUSPENSION_SPRING
-#define FRONT_SUSPENSION_DAMPING CLASSIC_FRONT_SUSPENSION_DAMPING
-#define REAR_SUSPENSION_SPRING CLASSIC_REAR_SUSPENSION_SPRING
-#define REAR_SUSPENSION_DAMPING CLASSIC_REAR_SUSPENSION_DAMPING
+#define FRONT_SUSPENSION_SPRING AMIGA_PLUS_FRONT_SUSPENSION_SPRING
+#define FRONT_SUSPENSION_DAMPING AMIGA_PLUS_FRONT_SUSPENSION_DAMPING
+#define REAR_SUSPENSION_SPRING AMIGA_PLUS_REAR_SUSPENSION_SPRING
+#define REAR_SUSPENSION_DAMPING AMIGA_PLUS_REAR_SUSPENSION_DAMPING
 
 #ifdef __cplusplus
 extern "C" {

@@ -21,7 +21,7 @@
 <p align="center">
   <code>Web</code> · <code>macOS</code> · <code>Windows</code> · <code>Linux</code>
   &nbsp;·&nbsp;
-  <code>U</code> Amiga+ &nbsp;·&nbsp; <code>I</code> Speed feel &nbsp;·&nbsp; <code>O</code> Enhanced Look &nbsp;·&nbsp; <code>N</code> Menu music
+  <code>I</code> Speed feel &nbsp;·&nbsp; <code>O</code> Enhanced Look &nbsp;·&nbsp; <code>N</code> Menu music
 </p>
 
 ---
@@ -49,7 +49,7 @@ It is **not** a modern racing sim. No PBR, no licensed cars, no battle pass. It 
 
 **What you get that matters:**
 
-- **Amiga+ physics** — suspension and damping tuned toward the original (toggle with <kbd>U</kbd>).
+- **Amiga physics** — suspension/damping locked to original Amiga constants (276 / 256).
 - **Speed feel** — FOV and motion blur that kick in as you carry speed (<kbd>I</kbd>).
 - **Enhanced Look** — a denser SCR world (horizon blocks, rails, flags, drones) that still reads as Amiga art, not realism (<kbd>O</kbd>).
 - **Four track packs** — Classic, TNT, Original, and Loops — dozens of circuits to cycle from the menu.
@@ -96,7 +96,7 @@ Visual bumps and border wear do **not** change physics — only how the track re
 | <kbd>←</kbd> <kbd>→</kbd> | Steer | — |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Accelerate / brake | — |
 | <kbd>Shift</kbd> | Boost | — |
-| <kbd>U</kbd> | Amiga+ physics | On |
+| <kbd>U</kbd> | Physics (Amiga locked) | Amiga |
 | <kbd>I</kbd> | Speed feel | On |
 | <kbd>O</kbd> | Enhanced Look | On |
 | <kbd>N</kbd> | Music on/off (all screens) | On |
@@ -134,7 +134,7 @@ Loops are steep spiral / banked-bowl layouts within the Amiga height-field model
 |:---|:---|
 | **Price** | Free — browser and downloads |
 | **Platforms** | WebAssembly, macOS (Apple Silicon), Windows x64, Linux (source) |
-| **Physics** | Amiga+ or Classic (<kbd>U</kbd>) |
+| **Physics** | Amiga (276 / 256; surface 256) |
 | **Presentation** | Speed feel + Enhanced Look toggles |
 | **Music** | Atari ST SNDH (native full mix; web chip-only) |
 | **Multiplayer** | Temporarily disabled |
@@ -214,12 +214,11 @@ Repo setup: **Settings → Pages → Source: GitHub Actions**.
 <details>
 <summary><strong>Physics tuning</strong></summary>
 
-| Mode | Springs | Damping |
-|:-----|--------:|--------:|
-| **Amiga+** <kbd>U</kbd> | 276 | 256 |
-| **Classic** | 320 | 200 |
+| Mode | Springs | Damping | Surface |
+|:-----|--------:|--------:|--------:|
+| **Amiga** (locked) | 276 | 256 | 256 |
 
-See [`docs/physics-audit.md`](docs/physics-audit.md). Parity harness: `python3 tools/physics_parity_harness.py`
+Classic remake springs (320/200) and surface 1024 are retired. See [`docs/physics-audit.md`](docs/physics-audit.md).
 
 </details>
 
