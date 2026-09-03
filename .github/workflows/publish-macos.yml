@@ -28,9 +28,8 @@ jobs:
         with:
           repository: nmarchand73/retro-music-player
           path: retro-music-player
-          sparse-checkout: |
-            tools/psgplay
-          sparse-checkout-cone-mode: false
+          sparse-checkout: tools/psgplay
+          sparse-checkout-cone-mode: true
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -70,7 +69,7 @@ jobs:
       - name: Setup MSYS2 MinGW
         uses: msys2/setup-msys2@v2
         with:
-          msys2_shell: ucrt64
+          msystem: UCRT64
           update: true
           install: >-
             mingw-w64-ucrt-x86_64-toolchain
@@ -82,12 +81,14 @@ jobs:
         with:
           repository: nmarchand73/retro-music-player
           path: retro-music-player
-          sparse-checkout: |
-            tools/psgplay
-          sparse-checkout-cone-mode: false
+          sparse-checkout: tools/psgplay
+          sparse-checkout-cone-mode: true
 
       - name: Build libpsgplay
-        run: make -C retro-music-player/tools/psgplay lib/psgplay/libpsgplay.a
+        run: |
+          test -f retro-music-player/tools/psgplay/Makefile
+          ls -la retro-music-player/tools/psgplay
+          make -C retro-music-player/tools/psgplay lib/psgplay/libpsgplay.a
 
       - name: Configure
         env:

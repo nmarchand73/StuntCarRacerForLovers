@@ -33,7 +33,6 @@ set(SCR_SOURCES
   src/platform_sdl_gl.cpp
   src/sound_sdl.cpp
   src/GameMusic.cpp
-  src/stb_vorbis_impl.c
   src/StuntCarRacer.cpp
   src/Track.cpp
   src/wavefunctions.cpp
@@ -238,6 +237,7 @@ else()
 
   if(STUNT_ENABLE_OGG_RACE_MUSIC)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/stb_vorbis.cmake)
+    target_sources(stuntcarracer PRIVATE src/stb_vorbis_impl.c)
     target_compile_definitions(stuntcarracer PRIVATE STUNT_OGG_RACE_MUSIC)
     target_include_directories(stuntcarracer PRIVATE ${stb_SOURCE_DIR})
     if(UNIX AND NOT APPLE)
