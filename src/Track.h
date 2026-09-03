@@ -145,4 +145,15 @@ extern void FreeGroundPlaneVertexBuffer(void);
 
 extern void DrawGroundPlane(RenderDevice* pDevice);
 
+/* Amiga track trailer (B.1ca2a..f + DAT.1c8a8/c8/e8). Loaded when .bin size > 804. */
+extern long TrackDamageLimitStandard;
+extern long TrackDamageLimitSuper;
+extern long TrackNearStartLinePiece;
+extern long TrackHasAmigaTrailer;
+extern long TrackSpeedOverlayCount;
+extern unsigned char TrackSpeedOverlaySection[];
+extern unsigned char TrackSpeedOverlayValue[];
+extern long TrackRestartExcludeCount;
+extern unsigned char TrackRestartExcludeSection[];
+
 #endif /* _TRACK */

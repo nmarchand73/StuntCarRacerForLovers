@@ -20,6 +20,8 @@
 #include "Atlas.h"
 
 #include <cmath>
+#include <cstring>
+#include <cstdio>
 
 /*    ===== */
 /*    Debug */
@@ -643,7 +645,7 @@ static long CoordVisible(long* xptr, long* yptr, long* zptr, long piece_x, long 
 static void UpdateDrawBridgeYCoords(long piece, long firstCoord, long lastCoord, long firstYIndex, long direction);
 
 static long ReadAmigaTrackData(long track);
-static void* GetTRACKResource(HMODULE hModule, LPCWSTR lpResName, const char* filePath, bool* outOwned);
+static void* GetTRACKResource(HMODULE hModule, LPCWSTR lpResName, const char* filePath, bool* outOwned, long* outSize);
 static long CanLoadTrackPack(TrackPack pack);
 
 static TrackPack gTrackPack = TRACK_PACK_CLASSIC;
@@ -800,8 +802,19 @@ long NumTrackPieces;    // Part of track definition (number.of.road.sections)
 long NumTrackSegments;  // Calculated by ConvertAmigaTrack() below
 long PlayersStartPiece; // Part of track definition (players.start.section)
 long StartLinePiece;    // Part of track definition (near.start.line.section)
-long HalfALapPiece;     // Part of track definition, but currently calculated by ReadAmigaTrackData() below
+long HalfALapPiece;     // Part of track definition (half.a.lap.section)
 long StandardBoost, SuperBoost;
+
+/* Amiga B.1ca2a..f trailer + optional DAT.1c8a8 / DAT.1c8c8 / DAT.1c8e8 tables. */
+long TrackDamageLimitStandard = 7;
+long TrackDamageLimitSuper = 7;
+long TrackNearStartLinePiece = 0;
+long TrackHasAmigaTrailer = FALSE;
+long TrackSpeedOverlayCount = 0;
+unsigned char TrackSpeedOverlaySection[MAX_PIECES_PER_TRACK] = {0};
+unsigned char TrackSpeedOverlayValue[MAX_PIECES_PER_TRACK] = {0};
+long TrackRestartExcludeCount = 0;
+unsigned char TrackRestartExcludeSection[MAX_PIECES_PER_TRACK] = {0};
 
 long ConvertAmigaTrack(long track) {
     static long first_time = TRUE;
@@ -2210,6 +2223,7 @@ void ResetDrawBridge(void) {
 /*    ======================================================================================= */
 
 #define TRACK_DATA_SIZE (804)
+#define TRACK_TRAILER_MIN_SIZE (TRACK_DATA_SIZE + 6)
 
 static long CanLoadTrackPack(TrackPack pack) {
     if ((pack < TRACK_PACK_CLASSIC) || (pack >= NUM_TRACK_PACKS))
@@ -2218,7 +2232,8 @@ static long CanLoadTrackPack(TrackPack pack) {
     const long track_count = GetTrackPackTrackCount(pack);
     for (long i = 0; i < track_count; ++i) {
         bool owned = false;
-        void* buffer = GetTRACKResource(NULL, kTrackResourceNames[pack][i], kTrackFilenames[pack][i], &owned);
+        long size = 0;
+        void* buffer = GetTRACKResource(NULL, kTrackResourceNames[pack][i], kTrackFilenames[pack][i], &owned, &size);
         if (buffer == NULL)
             return FALSE;
         if (owned)
@@ -2227,8 +2242,62 @@ static long CanLoadTrackPack(TrackPack pack) {
     return TRUE;
 }
 
+static void ClearAmigaTrackTrailer(void) {
+    TrackHasAmigaTrailer = FALSE;
+    TrackDamageLimitStandard = 7;
+    TrackDamageLimitSuper = 7;
+    TrackNearStartLinePiece = 0;
+    TrackSpeedOverlayCount = 0;
+    TrackRestartExcludeCount = 0;
+    memset(TrackSpeedOverlaySection, 0, sizeof(TrackSpeedOverlaySection));
+    memset(TrackSpeedOverlayValue, 0, sizeof(TrackSpeedOverlayValue));
+    memset(TrackRestartExcludeSection, 0, sizeof(TrackRestartExcludeSection));
+}
+
+static void LoadAmigaTrackTrailer(const unsigned char* buffer, long bufferSize) {
+    ClearAmigaTrackTrailer();
+    if (buffer == NULL || bufferSize < TRACK_TRAILER_MIN_SIZE)
+        return;
+
+    long i = TRACK_DATA_SIZE;
+    const long nearStart = static_cast<long>(buffer[i++]) & 0xff;
+    const long halfLap = static_cast<long>(buffer[i++]) & 0xff;
+    const long dmgStd = static_cast<long>(buffer[i++]) & 0xff;
+    const long dmgSup = static_cast<long>(buffer[i++]) & 0xff;
+    const long overlayCount = static_cast<long>(buffer[i++]) & 0xff;
+    const long excludeCount = static_cast<long>(buffer[i++]) & 0xff;
+
+    if (i + (overlayCount * 2) + excludeCount > bufferSize)
+        return;
+
+    TrackNearStartLinePiece = nearStart;
+    HalfALapPiece = halfLap;
+    if (NumTrackPieces > 0 && HalfALapPiece >= NumTrackPieces)
+        HalfALapPiece %= NumTrackPieces;
+
+    TrackDamageLimitStandard = dmgStd;
+    TrackDamageLimitSuper = dmgSup;
+
+    TrackSpeedOverlayCount = overlayCount;
+    if (TrackSpeedOverlayCount > MAX_PIECES_PER_TRACK)
+        TrackSpeedOverlayCount = MAX_PIECES_PER_TRACK;
+    for (long o = 0; o < TrackSpeedOverlayCount; ++o) {
+        TrackSpeedOverlaySection[o] = buffer[i++];
+        TrackSpeedOverlayValue[o] = buffer[i++];
+    }
+
+    TrackRestartExcludeCount = excludeCount;
+    if (TrackRestartExcludeCount > MAX_PIECES_PER_TRACK)
+        TrackRestartExcludeCount = MAX_PIECES_PER_TRACK;
+    for (long e = 0; e < TrackRestartExcludeCount; ++e)
+        TrackRestartExcludeSection[e] = buffer[i++];
+
+    TrackHasAmigaTrailer = TRUE;
+}
+
 static long ReadAmigaTrackData(long track) {
     static char* track_buffer_ptrs[NUM_TRACKS] = {0};
+    static long track_buffer_sizes[NUM_TRACKS] = {0};
     static bool track_buffer_owned[NUM_TRACKS] = {0};
     static long first_time = TRUE;
     static TrackPack loaded_pack = TRACK_PACK_CLASSIC;
@@ -2250,17 +2319,21 @@ static long ReadAmigaTrackData(long track) {
                 free(track_buffer_ptrs[i]);
             track_buffer_ptrs[i] = NULL;
             track_buffer_owned[i] = false;
+            track_buffer_sizes[i] = 0;
         }
 
         for (i = 0; i < track_count; i++) {
             bool owned = false;
-            buffer = (char*)GetTRACKResource(NULL, kTrackResourceNames[requested_pack][i], kTrackFilenames[requested_pack][i], &owned);
+            long size = 0;
+            buffer = (char*)GetTRACKResource(NULL, kTrackResourceNames[requested_pack][i], kTrackFilenames[requested_pack][i],
+                                             &owned, &size);
             if (buffer == NULL) {
                 for (j = 0; j < i; ++j) {
                     if (track_buffer_owned[j] && track_buffer_ptrs[j] != NULL)
                         free(track_buffer_ptrs[j]);
                     track_buffer_ptrs[j] = NULL;
                     track_buffer_owned[j] = false;
+                    track_buffer_sizes[j] = 0;
                 }
                 printf("Error loading Track %S\n", kTrackResourceNames[requested_pack][i]);
                 return (FALSE);
@@ -2268,6 +2341,7 @@ static long ReadAmigaTrackData(long track) {
 
             track_buffer_ptrs[i] = buffer;
             track_buffer_owned[i] = owned;
+            track_buffer_sizes[i] = (size > 0) ? size : TRACK_DATA_SIZE;
         }
 
         loaded_pack = requested_pack;
@@ -2278,15 +2352,14 @@ static long ReadAmigaTrackData(long track) {
     if (buffer == NULL)
         return FALSE;
 
-    // transfer track data into final locations (804-byte format)
+    // transfer track data into final locations (804-byte core + optional Amiga trailer)
     i = 0;
     NumTrackPieces = static_cast<long>(buffer[i++]) & 0xff;
     PlayersStartPiece = static_cast<long>(buffer[i++]) & 0xff;
     StartLinePiece = PlayersStartPiece;
     HalfALapPiece = StartLinePiece + NumTrackPieces / 2;
-    if (HalfALapPiece > NumTrackPieces)
+    if (HalfALapPiece >= NumTrackPieces && NumTrackPieces > 0)
         HalfALapPiece -= NumTrackPieces;
-    //    VALUE2 = HalfALapPiece;
 
     for (j = 0; j < MAX_PIECES_PER_TRACK; i++, j++)
         Piece_X_Z_Position[j] = buffer[i];
@@ -2316,12 +2389,22 @@ static long ReadAmigaTrackData(long track) {
 
     StandardBoost = static_cast<long>(buffer[i++]) & 0xff;
     SuperBoost = static_cast<long>(buffer[i++]) & 0xff;
+
+    LoadAmigaTrackTrailer(reinterpret_cast<const unsigned char*>(buffer), track_buffer_sizes[track]);
+    if (TrackHasAmigaTrailer) {
+        /* Amiga near.start.line.section drives start/finish HUD distance logic. */
+        StartLinePiece = TrackNearStartLinePiece;
+        if (StartLinePiece >= NumTrackPieces && NumTrackPieces > 0)
+            StartLinePiece %= NumTrackPieces;
+    }
     return (TRUE);
 }
 
-static void* GetTRACKResource(HMODULE hModule, LPCWSTR lpResName, const char* filePath, bool* outOwned) {
+static void* GetTRACKResource(HMODULE hModule, LPCWSTR lpResName, const char* filePath, bool* outOwned, long* outSize) {
     if (outOwned)
         *outOwned = false;
+    if (outSize)
+        *outSize = 0;
 
     if (filePath != NULL) {
         FILE* f = fopen(filePath, "rb");
@@ -2335,6 +2418,8 @@ static void* GetTRACKResource(HMODULE hModule, LPCWSTR lpResName, const char* fi
                     fclose(f);
                     if (outOwned)
                         *outOwned = true;
+                    if (outSize)
+                        *outSize = fsize;
                     return pTRACKBytes;
                 }
                 if (pTRACKBytes != NULL)
@@ -2357,8 +2442,12 @@ static void* GetTRACKResource(HMODULE hModule, LPCWSTR lpResName, const char* fi
 
     if ((pTRACKBytes = LockResource(hResData)) == NULL)
         return NULL;
+    if (outSize)
+        *outSize = static_cast<long>(SizeofResource(hModule, hResInfo));
     return pTRACKBytes;
 #else
+    (void)hModule;
+    (void)lpResName;
     return NULL;
 #endif
 }

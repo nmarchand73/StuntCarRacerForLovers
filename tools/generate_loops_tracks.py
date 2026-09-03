@@ -37,8 +37,8 @@ def get_word(data: bytes, offset: int) -> int:
 
 def decode_track(path: Path) -> dict:
     data = path.read_bytes()
-    if len(data) != TRACK_DATA_SIZE:
-        raise ValueError(f"{path} size {len(data)}, expected {TRACK_DATA_SIZE}")
+    if len(data) < TRACK_DATA_SIZE:
+        raise ValueError(f"{path} size {len(data)}, expected at least {TRACK_DATA_SIZE}")
     count = data[0]
     start = data[1]
     left_shifts = [get_word(data, 402 + i * 2) for i in range(count)]
@@ -54,6 +54,7 @@ def decode_track(path: Path) -> dict:
         "right_shifts": right_shifts,
         "standard_boost": data[802],
         "super_boost": data[803],
+        "trailer": bytes(data[TRACK_DATA_SIZE:]),
     }
 
 
@@ -107,7 +108,8 @@ def encode_track(
         put_word(out, 602 + i * 2, right_shifts[i])
     out[802] = standard_boost & 0xFF
     out[803] = super_boost & 0xFF
-    return bytes(out)
+    trailer = src.get("trailer") or b""
+    return bytes(out) + bytes(trailer)
 
 
 TRACKS = (

@@ -7,7 +7,7 @@
       "name": "Helix Climb",
       "file": "HelixClimb.bin",
       "source_footprint": "data/Tracks/RollerCoaster.bin",
-      "size": 804,
+      "size": 824,
       "pieces": 78,
       "start_piece": 0,
       "standard_boost": 80,
@@ -16,8 +16,8 @@
       "shift_scale": 1.0,
       "shift_lift": 600,
       "shift_peak": 400,
-      "sha1": "90b14ed87871e66584f809946515d33960b1a3cf",
-      "sha256": "55db6cc03f88f3b0efdddbfa3b162a72e22f035aad6c30d587a2531e96193a0a",
+      "sha1": "3647434afd41814383daa477349f5d96ca767f2d",
+      "sha256": "c9548df71adb95e1ed9d56016d73b4b6282000a4591ee61b167aa596343c4ab3",
       "route": [
         {
           "x": 15,
@@ -339,7 +339,7 @@
       "name": "Banked Bowl",
       "file": "BankedBowl.bin",
       "source_footprint": "data/Tracks/BigRamp.bin",
-      "size": 804,
+      "size": 828,
       "pieces": 44,
       "start_piece": 1,
       "standard_boost": 43,
@@ -348,8 +348,8 @@
       "shift_scale": 1.0,
       "shift_lift": 500,
       "shift_peak": 300,
-      "sha1": "0d4302c3af4f34fc8554bc4bc94d79cebe511357",
-      "sha256": "b931f0f9a3409c4f137a5e11bd6cf14864273b073e1b26e2849415321e98e645",
+      "sha1": "b6bb1fae5966179aa7116cde93444c00a1b04b1e",
+      "sha256": "e0870c415d30f6512c63ea96fbcf46ef3cd0bc2a324852dae9583bf5432c41d3",
       "route": [
         {
           "x": 0,
@@ -535,7 +535,7 @@
       "name": "Twin Cork",
       "file": "TwinCork.bin",
       "source_footprint": "data/Tracks/SkiJump.bin",
-      "size": 804,
+      "size": 823,
       "pieces": 40,
       "start_piece": 15,
       "standard_boost": 43,
@@ -544,8 +544,8 @@
       "shift_scale": 1.0,
       "shift_lift": 400,
       "shift_peak": 350,
-      "sha1": "6740bc3bed3fe2ef1ba4867b9dfe9ddf8eca898d",
-      "sha256": "cd9e912285d12a4de67d879eaf1d4edfe47950fb659c6d23ac8942d14b137a4e",
+      "sha1": "2b782367b7bb32540e0bdbba839924dd36702720",
+      "sha256": "a4aca946718907fc3ccbb075d8a63e9e5e1e776c7e65e2b8281391f2505a3c59",
       "route": [
         {
           "x": 13,
@@ -715,7 +715,7 @@
       "name": "Sky Coil",
       "file": "SkyCoil.bin",
       "source_footprint": "data/Tracks/HighJump.bin",
-      "size": 804,
+      "size": 836,
       "pieces": 52,
       "start_piece": 29,
       "standard_boost": 44,
@@ -724,8 +724,8 @@
       "shift_scale": 1.0,
       "shift_lift": 500,
       "shift_peak": 350,
-      "sha1": "19a68b265ee0f3b302c515688c1f12c922552bb8",
-      "sha256": "642ce494b75be55e01a8641b4784e0a2172d557de7b874373e48a041c7b7b203",
+      "sha1": "8e9fdcc11f973413cb3d8cc8bd8d05a21d8161f5",
+      "sha256": "506e5bb0076dc5b70c86cebddf43502bd83f44b02737eb3006cc322acf552ac9",
       "route": [
         {
           "x": 15,

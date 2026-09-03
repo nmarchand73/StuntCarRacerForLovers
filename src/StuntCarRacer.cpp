@@ -269,9 +269,11 @@ extern long boost_unit_value;
 extern long opp_engine_power;
 
 static long ResolveDamagedLimitForTrackLeague(void) {
-    // Original Amiga loads damaged.limit from per-track metadata bytes (B.1ca2a/B.1ca2b).
-    // Converted PC track data does not currently carry those bytes, so use a league-aware
-    // fallback that matches original broad pacing better than the legacy fixed value (10).
+    /* Prefer Amiga B.1ca2a / B.1ca2b from the track trailer when present. */
+    if (TrackHasAmigaTrailer)
+        return bSuperLeague ? TrackDamageLimitSuper : TrackDamageLimitStandard;
+
+    /* Legacy 804-byte packs (Original / Loops) keep the previous league fallback. */
     static const unsigned char kStandardLeagueDamageLimitByTrack[NUM_TRACKS] = {7, 7, 7, 7, 7, 7, 7, 7};
     static const unsigned char kSuperLeagueDamageLimitByTrack[NUM_TRACKS] = {7, 3, 3, 3, 3, 3, 7, 3};
 

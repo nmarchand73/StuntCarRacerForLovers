@@ -1783,14 +1783,22 @@ static void EnsureOpponentSpeedValuesForTrack(long track_id) {
     if (!bSuperLeague) {
         const unsigned char (*table)[MAX_PIECES_PER_TRACK] = GetStandardOpponentSpeedValuesForPack(trackPack);
         memcpy(opponents_speed_values[track_id], table[track_id], MAX_PIECES_PER_TRACK * sizeof(unsigned char));
-        return;
+    } else {
+        // Super league values aren't pre-baked; generate them once per track using
+        // the original algorithm, then reuse the table every frame.
+        for (long piece = 0; piece < NumTrackPieces && piece < MAX_PIECES_PER_TRACK; ++piece) {
+            const long v = Opponent_Speed_Value(track_id, piece);
+            opponents_speed_values[track_id][piece] = static_cast<unsigned char>(v & 0xff);
+        }
     }
 
-    // Super league values aren't pre-baked; generate them once per track using
-    // the original algorithm, then reuse the table every frame.
-    for (long piece = 0; piece < NumTrackPieces && piece < MAX_PIECES_PER_TRACK; ++piece) {
-        const long v = Opponent_Speed_Value(track_id, piece);
-        opponents_speed_values[track_id][piece] = static_cast<unsigned char>(v & 0xff);
+    /* Amiga srd1e: DAT.1c8a8/DAT.1c8c8 patches opponents.speed.values for matching sections. */
+    if (TrackHasAmigaTrailer) {
+        for (long o = 0; o < TrackSpeedOverlayCount; ++o) {
+            const long section = static_cast<long>(TrackSpeedOverlaySection[o]) & 0xff;
+            if (section >= 0 && section < MAX_PIECES_PER_TRACK)
+                opponents_speed_values[track_id][section] = TrackSpeedOverlayValue[o];
+        }
     }
 }
 

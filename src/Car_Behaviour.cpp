@@ -3646,19 +3646,32 @@ static void PositionCarAbovePiece(long piece) {
     long piece_x, piece_z, height;
 
     //******** Find section to lower car onto ********
+    const long startPiece = piece;
     for (;;) {
         long t = GetPieceAngleAndTemplate(piece);
         t &= 0xf; // templateNum
-        if (sections_car_can_be_put_on[t] & 0x80) {
+        bool reject = false;
+        if (sections_car_can_be_put_on[t] & 0x80)
+            reject = true;
+        /* Amiga DAT.1c8e8: track-specific sections that must not be used for restart/drop. */
+        if (!reject && TrackHasAmigaTrailer) {
+            for (long e = 0; e < TrackRestartExcludeCount; ++e) {
+                if ((static_cast<long>(TrackRestartExcludeSection[e]) & 0xff) == piece) {
+                    reject = true;
+                    break;
+                }
+            }
+        }
+        if (reject) {
             // go to previous piece if already at first surface
             piece--;
             if (piece < 0)
                 piece = (NumTrackPieces - 1);
+            if (piece == startPiece)
+                break; /* all sections excluded — keep original piece */
         } else
             break;
     }
-
-    // Should also reject Track specific pieces (DAT.1c8e8)
 
     // calculate x/z position of piece's front left corner, within world
     piece_x = Track[piece].x << LOG_CUBE_SIZE;
