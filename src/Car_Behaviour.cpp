@@ -4729,10 +4729,14 @@ void UpdateDamage(void) {
     if (g_logicTickDamaged)
         damaged = 0x80;
 
-    if (damaged) {
+    /* Amiga update.damage: new.damage = average(front L/R, rear). Remake redraws the crack
+       every frame from this value, so keep it synced from wheel damage even between hits. */
+    {
         long d = (front_left_damage + front_right_damage) / 2; // average front damage
-        new_damage = (d + rear_damage) / 2;                    // total average damage
-                                                               // value new_damage must be used to draw damage line
+        long avg = (d + rear_damage) / 2;                     // total average damage
+        if (avg > 0xff)
+            avg = 0xff;
+        new_damage = avg;
         if ((new_damage >= 0xf0) && NOT_WRECKED) {
             GAP_TELEMETRY_LOG(
                 "[GAPTEL][%llu] WRECK_TRIGGER inst=%ld piece=%ld seg=%ld newDamage=%ld damageValue=%ld "

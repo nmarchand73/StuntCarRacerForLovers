@@ -592,6 +592,10 @@ void DrawCockpit(RenderDevice* pDevice) {
     cockpitBodyVertexCount = cockpit_vtx - cockpitBodyVertexStart;
     g_cockpitAtlasUOffset = 0.0f;
     postCockpitBodyVertexStart = cockpit_vtx;
+    /* Damage overlays sit on the roll-bar strip. With the full-screen cockpit atlas the bar
+       occupies roughly the top ~16/200 of the 480px frame (~38px); keep Amiga 8px * 2.4 scale. */
+    const float damageY1 = 0.0f;
+    const float damageY2 = COCKPIT_DAMAGE_HEIGHT * 2.4f;
     if (new_damage) {
         // cracking... width is 238, offset is 41 (in 320x200 screen space)
         float dam = static_cast<float>(new_damage);
@@ -599,15 +603,13 @@ void DrawCockpit(RenderDevice* pDevice) {
             dam = COCKPIT_TOP_WIDTH;
         float damX1 = (Wide + COCKPIT_TOP_X_OFFSET) * 2.0f + offsetX,
               damX2 = (Wide + COCKPIT_TOP_X_OFFSET + dam) * 2.0f + offsetX;
-        float damY1 = 0.0f, damY2 = 0.0f + COCKPIT_DAMAGE_HEIGHT * 2.4f;
-        AddQuad(pVertices, damX1, damY1, damX2, damY2, 0.91f, (bSuperLeague) ? eCracking2 : eCracking, 0,
+        AddQuad(pVertices, damX1, damageY1, damX2, damageY2, 0.91f, (bSuperLeague) ? eCracking2 : eCracking, 0,
                 dam / COCKPIT_TOP_WIDTH);
     }
     for (int i = 0; i < nholes; i++) {
         float holeX1 = (Wide + COCKPIT_HOLE_X_OFFSET + COCKPIT_HOLE_SPACING * i) * 2 + offsetX,
               holeX2 = holeX1 + COCKPIT_HOLE_WIDTH * 2.0f;
-        float holeY1 = 0.0f, holeY2 = 0.0f + COCKPIT_DAMAGE_HEIGHT * 2.4f;
-        AddQuad(pVertices, holeX1, holeY1, holeX2, holeY2, 0.95f, (bSuperLeague) ? eHole2 : eHole, 0, 1);
+        AddQuad(pVertices, holeX1, damageY1, holeX2, damageY2, 0.95f, (bSuperLeague) ? eHole2 : eHole, 0, 1);
     }
 
     pCockpitVB->Unlock();
