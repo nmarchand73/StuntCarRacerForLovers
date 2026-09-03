@@ -28,6 +28,7 @@ jobs:
         with:
           repository: frno7/psgplay
           path: retro-music-player/tools/psgplay
+          submodules: recursive
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -70,6 +71,7 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
+            git
             mingw-w64-ucrt-x86_64-toolchain
             mingw-w64-ucrt-x86_64-cmake
             make
@@ -79,6 +81,7 @@ jobs:
         with:
           repository: frno7/psgplay
           path: retro-music-player/tools/psgplay
+          submodules: recursive
 
       - name: Build libpsgplay
         working-directory: ${{ github.workspace }}
