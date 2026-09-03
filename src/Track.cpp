@@ -723,6 +723,8 @@ long IsUnlimitedBoostEnabled(void) { return (gTrackPack == TRACK_PACK_LOOPS) ? T
  * Division 2: High Jump, Roller Coaster
  * Division 3: Stepping Stones, Big Ramp
  * Division 4: Little Ramp, Hump Back
+ *
+ * Menu order is easiest→hardest: Division 4, 3, 2, 1 (then other packs).
  */
 static const long kClassicDivisionTracks[NUM_TRACK_DIVISIONS][TRACKS_PER_DIVISION] = {
     {SKI_JUMP, DRAW_BRIDGE},
@@ -731,6 +733,15 @@ static const long kClassicDivisionTracks[NUM_TRACK_DIVISIONS][TRACKS_PER_DIVISIO
     {LITTLE_RAMP, HUMP_BACK},
 };
 
+/** Menu slots 0..3 map to display divisions 4, 3, 2, 1. */
+static long ClassicMenuSlotToDivisionIndex(long menuSlot) {
+    if (menuSlot < 0)
+        menuSlot = 0;
+    if (menuSlot >= NUM_TRACK_DIVISIONS)
+        menuSlot = NUM_TRACK_DIVISIONS - 1;
+    return (NUM_TRACK_DIVISIONS - 1) - menuSlot;
+}
+
 long GetClassicDivisionNumber(long trackId) {
     if (gTrackPack != TRACK_PACK_CLASSIC || trackId < 0)
         return 0;
@@ -738,6 +749,28 @@ long GetClassicDivisionNumber(long trackId) {
         for (long t = 0; t < TRACKS_PER_DIVISION; ++t) {
             if (kClassicDivisionTracks[d][t] == trackId)
                 return d + 1;
+        }
+    }
+    return 0;
+}
+
+long GetClassicTrackIdForMenuIndex(long menuIndex) {
+    const long count = NUM_TRACK_DIVISIONS * TRACKS_PER_DIVISION;
+    if (menuIndex < 0)
+        menuIndex = 0;
+    if (menuIndex >= count)
+        menuIndex = count - 1;
+    const long divisionIndex = ClassicMenuSlotToDivisionIndex(menuIndex / TRACKS_PER_DIVISION);
+    return kClassicDivisionTracks[divisionIndex][menuIndex % TRACKS_PER_DIVISION];
+}
+
+long GetClassicMenuIndexForTrackId(long trackId) {
+    for (long d = 0; d < NUM_TRACK_DIVISIONS; ++d) {
+        for (long t = 0; t < TRACKS_PER_DIVISION; ++t) {
+            if (kClassicDivisionTracks[d][t] == trackId) {
+                const long menuSlot = (NUM_TRACK_DIVISIONS - 1) - d;
+                return menuSlot * TRACKS_PER_DIVISION + t;
+            }
         }
     }
     return 0;

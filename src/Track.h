@@ -111,6 +111,10 @@ extern long IsUnlimitedBoostEnabled(void);
  * Mapping from reference/StuntCarRacer.s TAB.648c2 + practice menu eori #3.
  */
 extern long GetClassicDivisionNumber(long trackId);
+/** Classic pack menu order: Division 4→3→2→1 (two tracks each), then other packs. */
+extern long GetClassicTrackIdForMenuIndex(long menuIndex);
+/** Inverse of GetClassicTrackIdForMenuIndex; returns 0..7. */
+extern long GetClassicMenuIndexForTrackId(long trackId);
 
 extern char GetPieceAngleAndTemplate(long piece);
 

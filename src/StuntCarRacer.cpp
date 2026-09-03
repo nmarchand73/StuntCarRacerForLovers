@@ -525,7 +525,7 @@ static long InitialiseData(void) {
 
     CreateSinCosTable();
 
-    ConvertAmigaTrack(LITTLE_RAMP);
+    ConvertAmigaTrack(GetClassicTrackIdForMenuIndex(0));
 
     // Seed the random-number generator with current time so that
     // the numbers will be different every time we run
@@ -1486,6 +1486,8 @@ static long GetTrackMenuSelection(TrackPack pack, long track) {
         const TrackPack currentPack = static_cast<TrackPack>(p);
         const long count = GetTrackPackTrackCount(currentPack);
         if (currentPack == pack) {
+            if (pack == TRACK_PACK_CLASSIC)
+                return selection + GetClassicMenuIndexForTrackId(track);
             if (track < 0)
                 track = 0;
             if (track >= count)
@@ -1503,14 +1505,17 @@ static void ResolveTrackMenuSelection(long selection, TrackPack* pack, long* tra
         const long count = GetTrackPackTrackCount(currentPack);
         if (selection < count) {
             *pack = currentPack;
-            *track = selection;
+            if (currentPack == TRACK_PACK_CLASSIC)
+                *track = GetClassicTrackIdForMenuIndex(selection);
+            else
+                *track = selection;
             return;
         }
         selection -= count;
     }
 
     *pack = TRACK_PACK_CLASSIC;
-    *track = 0;
+    *track = GetClassicTrackIdForMenuIndex(0);
 }
 
 static void HandleTrackMenu(TextHelper& txtHelper) {

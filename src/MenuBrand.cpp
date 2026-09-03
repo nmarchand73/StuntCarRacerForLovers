@@ -280,11 +280,10 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
     DrawCenteredShadow(title, safeTrack, 278, 0.99f, 0.97f, 0.95f, 0.98f, 2);
 
     if (classicDivision >= 1 && classicDivision <= 4) {
-        static const wchar_t* kRoman[] = {L"", L"I", L"II", L"III", L"IV"};
         std::wstringstream ss;
-        ss << L"Division  " << kRoman[classicDivision];
-        script.SetDisplaySize(30);
-        DrawCenteredShadow(script, ss.str(), 318, 0.95f, 0.72f, 0.48f, 0.92f, 1);
+        ss << L"DIVISION " << classicDivision;
+        title.SetDisplaySize(20);
+        DrawCenteredShadow(title, ss.str(), 318, 0.98f, 0.78f, 0.35f, 0.95f, 1);
     }
 
     bodyText.SetDisplaySize(13);
@@ -355,11 +354,10 @@ void DrawTrackPreviewBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font
     DrawCenteredShadow(title, safeTrack, 42, 0.98f, 0.96f, 0.93f, brandAlpha, 2);
 
     if (classicDivision >= 1 && classicDivision <= 4) {
-        static const wchar_t* kRoman[] = {L"", L"I", L"II", L"III", L"IV"};
         std::wstringstream ss;
-        ss << L"Division  " << kRoman[classicDivision];
-        script.SetDisplaySize(26);
-        DrawCenteredShadow(script, ss.str(), 84, 0.95f, 0.72f, 0.48f, brandAlpha * 0.95f, 1);
+        ss << L"DIVISION " << classicDivision;
+        title.SetDisplaySize(18);
+        DrawCenteredShadow(title, ss.str(), 84, 0.98f, 0.78f, 0.35f, brandAlpha * 0.95f, 1);
     }
 
     bodyText.SetDisplaySize(13);
