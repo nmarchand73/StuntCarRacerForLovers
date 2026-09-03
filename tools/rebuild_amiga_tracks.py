@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
-Rebuild Classic + TNT 804-byte track blobs with Amiga trailer metadata appended.
+Append Amiga trailer metadata to Classic + TNT track blobs.
 
-Legacy layout (804 bytes) is unchanged. When file size > 804:
+When an existing remake .bin is present, its 804-byte geometry core is preserved
+(only boost stock bytes 802-803 are refreshed). Re-decoding SCR-TNT into a full
+804-byte core can diverge slightly and warp a track (LittleRamp road_xz[37]).
+
+When file size > 804:
   [804] near.start.line.section
   [805] half.a.lap.section
   [806] damaged.limit (standard league)   # B.1ca2a
@@ -237,6 +241,24 @@ def decode_track(data: bytes, base_offset: int, piece_offsets: bytes, y_offsets:
     }
 
 
+def _amiga_trailer(decoded: Dict) -> bytes:
+    """Bytes after the 804-byte remake core: near/half/damage + overlay/exclude tables."""
+    ext = bytearray()
+    ext.append(decoded["near_start"] & 0xFF)
+    ext.append(decoded["half_lap"] & 0xFF)
+    ext.append(decoded["dmg_std"] & 0xFF)
+    ext.append(decoded["dmg_sup"] & 0xFF)
+    overlays = decoded["overlays"]
+    restart_exclude = decoded["restart_exclude"]
+    ext.append(len(overlays) & 0xFF)
+    ext.append(len(restart_exclude) & 0xFF)
+    for section_id, speed in overlays:
+        ext.append(section_id & 0xFF)
+        ext.append(speed & 0xFF)
+    ext.extend(restart_exclude)
+    return bytes(ext)
+
+
 def rebuild_pack(
     source: bytes,
     base_offset: int,
@@ -250,15 +272,30 @@ def rebuild_pack(
     for index, (name, raw_start) in enumerate(tracks):
         decoded = decode_track(source, base_offset, piece_offsets, y_offsets, raw_start)
         out_path = output_dir / f"{name}.bin"
-        out_path.write_bytes(decoded["blob"])
+        # Prefer the existing remake 804-byte core when present. Re-decoding from
+        # SCR-TNT can differ by a byte (seen on LittleRamp road_xz[37]) and warp geometry.
+        existing = out_path.read_bytes() if out_path.is_file() else b""
+        if len(existing) >= TRACK_DATA_SIZE:
+            core = existing[:TRACK_DATA_SIZE]
+            # Keep Amiga boost stock from decode inside the legacy core slots.
+            core = bytearray(core)
+            core[802] = decoded["std_boost"] & 0xFF
+            core[803] = decoded["super_boost"] & 0xFF
+            blob = bytes(core) + _amiga_trailer(decoded)
+            geom_src = "preserved"
+        else:
+            blob = decoded["blob"]
+            geom_src = "decoded"
+        out_path.write_bytes(blob)
         manifest_tracks.append(
             {
                 "index": index,
                 "name": name,
                 "file": out_path.name,
                 "raw_start_hex": f"0x{raw_start:04X}",
-                "size": len(decoded["blob"]),
-                "sha1": _sha1_hex(decoded["blob"]),
+                "size": len(blob),
+                "sha1": _sha1_hex(blob),
+                "geometry_source": geom_src,
                 "near_start": decoded["near_start"],
                 "half_lap": decoded["half_lap"],
                 "damage_limit_standard": decoded["dmg_std"],
@@ -270,8 +307,9 @@ def rebuild_pack(
             }
         )
         print(
-            f"{name:16} size={len(decoded['blob']):4} dmg={decoded['dmg_std']}/{decoded['dmg_sup']} "
-            f"half={decoded['half_lap']} overlays={len(decoded['overlays'])} exclude={len(decoded['restart_exclude'])}"
+            f"{name:16} size={len(blob):4} dmg={decoded['dmg_std']}/{decoded['dmg_sup']} "
+            f"half={decoded['half_lap']} overlays={len(decoded['overlays'])} exclude={len(decoded['restart_exclude'])} "
+            f"[{geom_src}]"
         )
     return manifest_tracks
 
