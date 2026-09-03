@@ -103,6 +103,10 @@ extern void BeginLogicTickDamagePeriod(void);
 
 extern void ResetLapData(long car);
 extern void UpdateLapData(void);
+/** Amiga-style current / best lap times for the cockpit HUD (M:SS.HH). */
+extern bool FormatCurrentLapTimeForHud(wchar_t* out, size_t outChars);
+extern bool FormatBestLapTimeForHud(wchar_t* out, size_t outChars);
+extern bool IsBestLapTimePlayers(void);
 
 #ifdef USE_AMIGA_RECORDING
 // Following only used for testing against Amiga

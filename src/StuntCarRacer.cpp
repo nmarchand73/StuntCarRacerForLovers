@@ -1949,7 +1949,7 @@ static void DrawGameplayCockpitHud(TextHelper& txtHelper, long lapValue, long op
 
     txtHelper.SetForegroundColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-    // Boost text - positioned in top dashboard box
+    // Left top: lap + boost (Amiga print.lap.boost.text)
     txtHelper.SetInsertionPos(static_cast<int>((88 + (wideScreen ? 80 : 0)) * textScale + cockpitOffsetX),
                               static_cast<int>(BASE_HEIGHT - 48.0f));
     {
@@ -1959,13 +1959,27 @@ static void DrawGameplayCockpitHud(TextHelper& txtHelper, long lapValue, long op
         txtHelper.DrawFormattedTextLine(ss.str());
     }
 
-    // Distance text - positioned in bottom dashboard box
+    // Left bottom: separation from opponent
     txtHelper.SetInsertionPos(static_cast<int>((84 + (wideScreen ? 80 : 0)) * textScale + cockpitOffsetX),
                               static_cast<int>(BASE_HEIGHT - 25.0f));
     {
         std::wstringstream ss;
         ss << L"        " << std::showpos << std::setw(5) << std::setfill(L'0') << opponentsDistance;
         txtHelper.DrawFormattedTextLine(ss.str());
+    }
+
+    // Right top: current lap time (Amiga print.lap.time column 34 / row 22)
+    // Right bottom: best lap time (yours or opponent's)
+    const int rightX = static_cast<int>((520 + (wideScreen ? 80 : 0)) * textScale + cockpitOffsetX);
+    WCHAR currentLapTime[16];
+    WCHAR bestLapTime[16];
+    if (FormatCurrentLapTimeForHud(currentLapTime, 16)) {
+        txtHelper.SetInsertionPos(rightX, static_cast<int>(BASE_HEIGHT - 48.0f));
+        txtHelper.DrawFormattedTextLine(currentLapTime);
+    }
+    if (FormatBestLapTimeForHud(bestLapTime, 16)) {
+        txtHelper.SetInsertionPos(rightX, static_cast<int>(BASE_HEIGHT - 25.0f));
+        txtHelper.DrawFormattedTextLine(bestLapTime);
     }
 }
 
@@ -2635,13 +2649,16 @@ static void RefreshGamepadInput(void) {
 
 static void RefreshCombinedInput(void) {
     RefreshGamepadInput();
-    g_keyboardInput = ApplyAmigaKeyboardInputCoupling(g_keyboardInput);
+    /* Couple Amiga-style aliases (boost→accel, brake→boost) into a derived mask only.
+     * Never mutate g_keyboardInput: ORing boost/accel into the sticky key state made
+     * brake leave boost+accel latched, so ↓ could not slow the car. */
+    const DWORD coupledKeyboard = ApplyAmigaKeyboardInputCoupling(g_keyboardInput);
     if (bMultiplayerMode) {
         DWORD player1Input = 0;
         DWORD player2Input = 0;
 
         if (g_multiplayerPlayer1IsKeyboard) {
-            player1Input = g_keyboardInput;
+            player1Input = coupledKeyboard;
             for (int i = 0; i < MAX_LOCAL_PLAYERS; ++i) {
                 if (!g_gamepadSlots[i].handle || !SDL_GameControllerGetAttached(g_gamepadSlots[i].handle))
                     continue;
@@ -2662,7 +2679,7 @@ static void RefreshCombinedInput(void) {
                     (player1Slot >= 0) ? g_gamepadSlots[player1Slot].instanceId : -1;
             }
 
-            player2Input = g_keyboardInput;
+            player2Input = coupledKeyboard;
             for (int i = 0; i < MAX_LOCAL_PLAYERS; ++i) {
                 if (!g_gamepadSlots[i].handle || !SDL_GameControllerGetAttached(g_gamepadSlots[i].handle))
                     continue;
@@ -2674,7 +2691,7 @@ static void RefreshCombinedInput(void) {
 
             // Fallback: if no controllers are attached, keep multiplayer playable from keyboard.
             if (player1Slot < 0) {
-                player1Input = g_keyboardInput;
+                player1Input = coupledKeyboard;
                 player2Input = 0;
             }
         }
@@ -2690,7 +2707,7 @@ static void RefreshCombinedInput(void) {
              * local gamepads and the guest's gamepad drives only player 2 via WebRTC.
              * We use visibilityState instead of document.hasFocus() because hasFocus() can
              * remain false when the tab is focused but the user is using a gamepad. */
-            DWORD localOnly = g_keyboardInput;
+            DWORD localOnly = coupledKeyboard;
             const int hostTabVisible = EM_ASM_INT({
                 return (typeof document.visibilityState !== 'undefined' && document.visibilityState === 'visible') ? 1 : 0;
             });
@@ -2710,7 +2727,7 @@ static void RefreshCombinedInput(void) {
         g_player2Input = player2Input;
 #endif
     } else {
-        DWORD combinedInput = g_keyboardInput;
+        DWORD combinedInput = coupledKeyboard;
         for (int i = 0; i < MAX_LOCAL_PLAYERS; ++i)
             combinedInput |= g_gamepadInput[i];
         lastInput = combinedInput;
@@ -2791,13 +2808,14 @@ static void CloseAllGamepads(void) {
 }
 #else
 static void RefreshCombinedInput(void) {
-    g_keyboardInput = ApplyAmigaKeyboardInputCoupling(g_keyboardInput);
+    /* Derived coupling only — keep g_keyboardInput as raw pressed keys. */
+    const DWORD coupledKeyboard = ApplyAmigaKeyboardInputCoupling(g_keyboardInput);
     if (bMultiplayerMode) {
         // No gamepad API in this build; keep multiplayer controllable from keyboard.
-        lastInput = g_keyboardInput;
+        lastInput = coupledKeyboard;
         g_player2Input = 0;
     } else {
-        lastInput = g_keyboardInput;
+        lastInput = coupledKeyboard;
         g_player2Input = 0;
     }
 }

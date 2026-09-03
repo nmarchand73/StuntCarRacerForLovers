@@ -41,8 +41,10 @@
 #include "platform_sdl_gl.h"
 
 #include <cmath>
+#include <cstdio>
 #include <stdlib.h>
 #include <vector>
+#include <wchar.h>
 
 #include "StuntCarRacer.h"
 #include "Car_Behaviour.h"
@@ -132,6 +134,8 @@ extern IDirectSoundBuffer8* SmashSoundBuffer;
 extern IDirectSoundBuffer8* OffRoadSoundBuffer;
 
 extern bool bSuperLeague;
+extern bool bPaused;
+extern GameModeType GameMode;
 
 /*    =========== */
 /*    Static data */
@@ -2071,6 +2075,8 @@ void AdvanceFourteenFrameTiming(void) {
     fourteen_frames_elapsed = (sum > 0xffu) ? 0 : -1;
 }
 
+static void AdvanceLapTimersAmigaFrame(void);
+
 void AccumulateAmigaFrameTiming(double stepSeconds) {
     if (stepSeconds <= 0.0) {
         return;
@@ -2080,6 +2086,7 @@ void AccumulateAmigaFrameTiming(double stepSeconds) {
         g_amigaFrameAccumSeconds -= kAmigaFrameSeconds;
         AdvanceFourteenFrameTiming();
         g_amigaBoostDrainDue = true;
+        AdvanceLapTimersAmigaFrame();
     }
 }
 
@@ -4810,7 +4817,7 @@ PlayCreakSound:
 /*    ======================================================================================= */
 /*    Function:        UpdateLapData                                                            */
 /*                                                                                            */
-/*    Description:                */
+/*    Description:    Lap counting + Amiga-style current/best lap stopwatches (DAT.1c908…).   */
 /*    ======================================================================================= */
 
 #define LAP_THAT_FINISHES_RACE (4)
@@ -4821,14 +4828,136 @@ bool raceFinished, raceWon;
 long lapNumber[NUM_CARS];
 static bool carOnFirstHalfOfLap[NUM_CARS] = {false, false};
 
+/* Amiga DAT.1c908 / DAT.1c920 / DAT.1c938: minutes (0-9), seconds BCD, hundredths BCD. */
+struct AmigaLapTime {
+    unsigned char minutes;
+    unsigned char secondsBcd;
+    unsigned char hundredthsBcd;
+};
+
+static AmigaLapTime g_lapCurrent[NUM_CARS];
+static AmigaLapTime g_lapBest;
+static AmigaLapTime g_lapFlash;
+static bool g_lapBestValid = false;
+static bool g_lapBestIsPlayer = false;
+static int g_lapFlashFramesRemaining = 0; /* Amiga B.1bbcc */
+
+static void ClearAmigaLapTime(AmigaLapTime* t) {
+    t->minutes = 0;
+    t->secondsBcd = 0;
+    t->hundredthsBcd = 0;
+}
+
+static unsigned char BcdAddDigitPair(unsigned char a, unsigned char b, unsigned char* carryInOut) {
+    unsigned int lo = (a & 0x0fu) + (b & 0x0fu) + (*carryInOut & 0x0fu);
+    unsigned int hi = ((a >> 4) & 0x0fu) + ((b >> 4) & 0x0fu);
+    unsigned char carry = 0;
+    if (lo > 9) {
+        lo -= 10;
+        hi += 1;
+    }
+    if (hi > 9) {
+        hi -= 10;
+        carry = 1;
+    }
+    *carryInOut = carry;
+    return static_cast<unsigned char>(((hi & 0x0fu) << 4) | (lo & 0x0fu));
+}
+
+/* reference/StuntCarRacer.s add.to.lap.time — add.b #19 then abcd chain. */
+static void AddAmigaLapTimeHundredths(AmigaLapTime* t, unsigned char bcdAdd) {
+    unsigned char carry = 0;
+    t->hundredthsBcd = BcdAddDigitPair(t->hundredthsBcd, bcdAdd, &carry);
+    if (!carry)
+        return;
+
+    carry = 0;
+    t->secondsBcd = BcdAddDigitPair(t->secondsBcd, 0, &carry); /* +1 via incoming abcd carry */
+    /* Amiga: after abcd with 0, seconds already include +1; then cmpi.b #96. */
+    if (t->secondsBcd < 0x60)
+        return;
+
+    t->secondsBcd = 0;
+    if (t->minutes < 9)
+        ++t->minutes;
+}
+
+static bool LapTimeLess(const AmigaLapTime& a, const AmigaLapTime& b) {
+    if (a.minutes != b.minutes)
+        return a.minutes < b.minutes;
+    if (a.secondsBcd != b.secondsBcd)
+        return a.secondsBcd < b.secondsBcd;
+    return a.hundredthsBcd < b.hundredthsBcd;
+}
+
+static void FormatAmigaLapTime(const AmigaLapTime& t, wchar_t* out, size_t outChars) {
+    if (!out || outChars < 8)
+        return;
+    const unsigned secTens = (t.secondsBcd >> 4) & 0x0fu;
+    const unsigned secOnes = t.secondsBcd & 0x0fu;
+    const unsigned hunTens = (t.hundredthsBcd >> 4) & 0x0fu;
+    const unsigned hunOnes = t.hundredthsBcd & 0x0fu;
+    swprintf(out, outChars, L"%u:%u%u.%u%u", static_cast<unsigned>(t.minutes & 0x0fu), secTens, secOnes, hunTens,
+             hunOnes);
+}
+
+static void ConsiderBestLap(long car, const AmigaLapTime& completed) {
+    if (!g_lapBestValid || LapTimeLess(completed, g_lapBest)) {
+        g_lapBest = completed;
+        g_lapBestValid = true;
+        g_lapBestIsPlayer = (car == PLAYER);
+    }
+}
+
+static void OnLapNumberIncreased(long car, long previousLap) {
+    if (previousLap == 0) {
+        /* Crossing start onto lap 1: discard countdown-to-green time (Amiga clear.three.bytes). */
+        ClearAmigaLapTime(&g_lapCurrent[car]);
+        return;
+    }
+
+    /* Completed lap previousLap (>=1). */
+    const AmigaLapTime completed = g_lapCurrent[car];
+    ConsiderBestLap(car, completed);
+    if (car == PLAYER) {
+        g_lapFlash = completed;
+        g_lapFlashFramesRemaining = 27; /* Amiga B.1bbcc */
+    }
+    ClearAmigaLapTime(&g_lapCurrent[car]);
+}
+
+static void AdvanceLapTimersAmigaFrame(void) {
+    if (GameMode != GAME_IN_PROGRESS || bPaused)
+        return;
+
+    for (long car = OPPONENT; car < NUM_CARS; ++car) {
+        if (lapNumber[car] >= 1)
+            AddAmigaLapTimeHundredths(&g_lapCurrent[car], 0x19);
+    }
+
+    if (g_lapFlashFramesRemaining > 0)
+        --g_lapFlashFramesRemaining;
+}
+
 void ResetLapData(long car) {
     raceFinished = raceWon = FALSE;
     lapNumber[car] = 0;
     carOnFirstHalfOfLap[car] = false;
+    ClearAmigaLapTime(&g_lapCurrent[car]);
+    if (car == PLAYER) {
+        ClearAmigaLapTime(&g_lapBest);
+        ClearAmigaLapTime(&g_lapFlash);
+        g_lapBestValid = false;
+        g_lapBestIsPlayer = false;
+        g_lapFlashFramesRemaining = 0;
+    }
 }
 
 void UpdateLapData(void) {
     long car, current_piece, start_finish_piece = (StartLinePiece + 1 < NumTrackPieces) ? (StartLinePiece + 1) : 0;
+    long previousLap[NUM_CARS];
+    previousLap[OPPONENT] = lapNumber[OPPONENT];
+    previousLap[PLAYER] = lapNumber[PLAYER];
 
     for (car = OPPONENT; car < NUM_CARS; car++) {
         current_piece = car == PLAYER ? player_current_piece : opponents_current_piece;
@@ -4842,8 +4971,10 @@ void UpdateLapData(void) {
         }
     }
 
-    //    VALUE2 = lapNumber[OPPONENT];
-    //    VALUE3 = carOnFirstHalfOfLap[PLAYER] ? 1 : 0;
+    for (car = OPPONENT; car < NUM_CARS; car++) {
+        if (lapNumber[car] > previousLap[car])
+            OnLapNumberIncreased(car, previousLap[car]);
+    }
 
     for (car = OPPONENT; car < NUM_CARS; car++) {
         if (!raceFinished) {
@@ -4859,6 +4990,34 @@ void UpdateLapData(void) {
             }
         }
     }
+}
+
+bool FormatCurrentLapTimeForHud(wchar_t* out, size_t outChars) {
+    if (!out || outChars == 0)
+        return false;
+    out[0] = L'\0';
+    if (lapNumber[PLAYER] < 1)
+        return false;
+    if (g_lapFlashFramesRemaining > 0) {
+        FormatAmigaLapTime(g_lapFlash, out, outChars);
+        return true;
+    }
+    FormatAmigaLapTime(g_lapCurrent[PLAYER], out, outChars);
+    return true;
+}
+
+bool FormatBestLapTimeForHud(wchar_t* out, size_t outChars) {
+    if (!out || outChars == 0)
+        return false;
+    out[0] = L'\0';
+    if (!g_lapBestValid)
+        return false;
+    FormatAmigaLapTime(g_lapBest, out, outChars);
+    return true;
+}
+
+bool IsBestLapTimePlayers(void) {
+    return g_lapBestValid && g_lapBestIsPlayer;
 }
 
 #ifdef USE_AMIGA_RECORDING
