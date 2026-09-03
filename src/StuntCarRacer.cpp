@@ -123,6 +123,9 @@ IDirectSoundBuffer8* SmashSoundBuffer = NULL;
 IDirectSoundBuffer8* OffRoadSoundBuffer = NULL;
 IDirectSoundBuffer8* EngineSoundBuffers[8] = {NULL};
 IDirectSoundBuffer8* EngineSoundBuffers2[8] = {NULL};
+/* Amiga engine was 48; already halved, then another 30% quieter. */
+static const long kEngineAmigaVolume = (48 / 2) * 7 / 10;
+static const long kEngineAmigaVolumeSplitLocal = (48 / 3) * 7 / 10;
 
 GpuTexture* g_pAtlas = NULL;
 GpuTexture* g_pCockpitAtlas = NULL;
@@ -449,8 +452,7 @@ bool DSSetMode() {
     for (i = 0; i < 8; i++) {
         // Keep engine centered for balanced stereo output on modern devices.
         EngineSoundBuffers[i]->SetPan(DSBPAN_CENTER);
-        // Original Amiga volume was 48, but have reduced this for testing
-        EngineSoundBuffers[i]->SetVolume(AmigaVolumeToMixerGain(48 / 2));
+        EngineSoundBuffers[i]->SetVolume(AmigaVolumeToMixerGain(kEngineAmigaVolume));
     }
 
     // Second set for player 2 (bottom split-screen) so both engines mix.
@@ -473,7 +475,7 @@ bool DSSetMode() {
 
     for (i = 0; i < 8; i++) {
         EngineSoundBuffers2[i]->SetPan(DSBPAN_CENTER);
-        EngineSoundBuffers2[i]->SetVolume(AmigaVolumeToMixerGain(48 / 2));
+        EngineSoundBuffers2[i]->SetVolume(AmigaVolumeToMixerGain(kEngineAmigaVolume));
     }
 
     return TRUE;
@@ -3420,7 +3422,7 @@ static bool RunFrame(double frameTime, bool allowQuit) {
     // Split-screen audio: two modes.
     // - WebRTC connected: full L/R pan only; JS ChannelSplitter sends left (P1) to host speakers
     //   and right (P2) to a separate audio track for the guest. No volume reduction or detune.
-    // - Local split-screen only: mild ±4000 pan, reduced volume (48/3), and P2 detune (0.98f)
+    // - Local split-screen only: mild ±4000 pan, reduced engine volume, and P2 detune (0.98f)
     //   so both cars mix nicely on one device.
     {
         static bool s_prevSplitScreen = false;
@@ -3435,7 +3437,8 @@ static bool RunFrame(double frameTime, bool allowQuit) {
             if (splitScreenGameplay) {
                 const long p1Pan = webrtcActive ? DSBPAN_LEFT : -4000;
                 const long p2Pan = webrtcActive ? DSBPAN_RIGHT : 4000;
-                const long vol = webrtcActive ? AmigaVolumeToMixerGain(48 / 2) : AmigaVolumeToMixerGain(48 / 3);
+                const long vol = webrtcActive ? AmigaVolumeToMixerGain(kEngineAmigaVolume)
+                                              : AmigaVolumeToMixerGain(kEngineAmigaVolumeSplitLocal);
                 for (int i = 0; i < 8; ++i) {
                     if (EngineSoundBuffers[i])  { EngineSoundBuffers[i]->SetPan(p1Pan);  EngineSoundBuffers[i]->SetVolume(vol); }
                     if (EngineSoundBuffers2[i]) { EngineSoundBuffers2[i]->SetPan(p2Pan); EngineSoundBuffers2[i]->SetVolume(vol); }
@@ -3452,8 +3455,8 @@ static bool RunFrame(double frameTime, bool allowQuit) {
                 if (HitCarSoundBuffer)   HitCarSoundBuffer->SetPan(p1SfxPan);
             } else {
                 for (int i = 0; i < 8; ++i) {
-                    if (EngineSoundBuffers[i])  { EngineSoundBuffers[i]->SetPan(DSBPAN_CENTER);  EngineSoundBuffers[i]->SetVolume(AmigaVolumeToMixerGain(48 / 2)); }
-                    if (EngineSoundBuffers2[i]) { EngineSoundBuffers2[i]->SetPan(DSBPAN_CENTER); EngineSoundBuffers2[i]->SetVolume(AmigaVolumeToMixerGain(48 / 2)); }
+                    if (EngineSoundBuffers[i])  { EngineSoundBuffers[i]->SetPan(DSBPAN_CENTER);  EngineSoundBuffers[i]->SetVolume(AmigaVolumeToMixerGain(kEngineAmigaVolume)); }
+                    if (EngineSoundBuffers2[i]) { EngineSoundBuffers2[i]->SetPan(DSBPAN_CENTER); EngineSoundBuffers2[i]->SetVolume(AmigaVolumeToMixerGain(kEngineAmigaVolume)); }
                 }
                 if (WreckSoundBuffer)    WreckSoundBuffer->SetPan(DSBPAN_RIGHT);
                 if (GroundedSoundBuffer) GroundedSoundBuffer->SetPan(DSBPAN_RIGHT);
