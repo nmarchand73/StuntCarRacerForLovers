@@ -1519,7 +1519,7 @@ static void HandleTrackMenu(TextHelper& txtHelper) {
     DrawTrackMenuBrand(txtHelper, g_pFontDisplay, g_pFontScript, g_pSprite,
                        (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
                        IsAmigaPhysicsUpgradeEnabled(), IsSpeedFeelEnabled(), GameMusic_IsMenuMusicEnabled(),
-                       GetTimeSeconds());
+                       GetClassicDivisionNumber(TrackID), GetTimeSeconds());
 
     const bool goPrev = (keyPress == SDLK_LEFT || keyPress == SDLK_UP);
     const bool goNext = (keyPress == SDLK_RIGHT || keyPress == SDLK_DOWN);
@@ -1642,7 +1642,7 @@ static void HandleTrackPreview(TextHelper& txtHelper) {
 
     DrawTrackPreviewBrand(txtHelper, g_pFontDisplay, g_pFontScript, g_pSprite,
                           (TrackID == NO_TRACK) ? L"None" : GetTrackName(TrackID), GetTrackPackName(), bSuperLeague,
-                          false, GetSinglePlayerOpponentCount(), GetTimeSeconds());
+                          false, GetSinglePlayerOpponentCount(), GetClassicDivisionNumber(TrackID), GetTimeSeconds());
 
     if (keyPress == STARTMENU) {
 #ifdef USE_SDL2

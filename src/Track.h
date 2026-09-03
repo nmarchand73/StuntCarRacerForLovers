@@ -49,6 +49,10 @@ typedef enum {
     NUM_TRACK_PACKS = 4
 } TrackPack;
 
+/** Amiga practice / league divisions (display numbers 1–4). Classic pack only. */
+#define NUM_TRACK_DIVISIONS 4
+#define TRACKS_PER_DIVISION 2
+
 /*    ===================== */
 /*    Structure definitions */
 /*    ===================== */
@@ -101,6 +105,12 @@ extern long SetTrackPack(TrackPack pack);
 extern const WCHAR* GetTrackPackName(void);
 /** Loops pack: fire/boost does not drain (steep spiral layouts). */
 extern long IsUnlimitedBoostEnabled(void);
+
+/**
+ * Amiga Classic-pack division for a track ID (1–4), or 0 if not Classic / unknown.
+ * Mapping from reference/StuntCarRacer.s TAB.648c2 + practice menu eori #3.
+ */
+extern long GetClassicDivisionNumber(long trackId);
 
 extern char GetPieceAngleAndTemplate(long piece);
 

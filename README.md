@@ -118,7 +118,7 @@ Visual bumps and border wear do **not** change physics — only how the track re
 
 | Pack | Highlights |
 |:-----|:-----------|
-| **Classic** | Little Ramp, Big Ramp, Draw Bridge, Roller Coaster, … |
+| **Classic** | Amiga divisions: **I** Ski Jump · Draw Bridge · **II** High Jump · Roller Coaster · **III** Stepping Stones · Big Ramp · **IV** Little Ramp · Hump Back |
 | **TNT** | Dizzy Descent, Witty Way, Rat Race, … (extracted from the Amiga expansion) |
 | **Original** | Skyline Spiral |
 | **Loops** | Helix Climb, Banked Bowl, Twin Cork, Sky Coil |

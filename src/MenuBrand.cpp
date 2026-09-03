@@ -225,7 +225,7 @@ void ResetTrackPreviewBrandMotion(double timeSeconds) {
 
 void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,
                         const wchar_t* trackName, const wchar_t* packName, bool superLeague, bool amigaPhysics,
-                        bool speedFeel, bool menuMusic, double timeSeconds) {
+                        bool speedFeel, bool menuMusic, long classicDivision, double timeSeconds) {
     const float W = static_cast<float>(MenuProjectionWidth());
     const float H = 480.0f;
 
@@ -243,11 +243,9 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
     /* Warm night scrims — leave the track vista open in the middle */
     DrawGradientRect(0.0f, 0.0f, W, 178.0f, RGBA_MAKE(12, 8, 14, 220), RGBA_MAKE(18, 10, 16, 0));
     DrawGradientRect(0.0f, H - 158.0f, W, H, RGBA_MAKE(18, 10, 16, 0), RGBA_MAKE(10, 6, 12, 235));
-    /* Soft side falloff so the wordmark sits in a pocket without boxing the track */
     DrawGradientRect(0.0f, 0.0f, W * 0.14f, H, RGBA_MAKE(10, 6, 12, 90), RGBA_MAKE(10, 6, 12, 0));
     DrawGradientRect(W * 0.86f, 0.0f, W, H, RGBA_MAKE(10, 6, 12, 0), RGBA_MAKE(10, 6, 12, 90));
 
-    /* Elegant brand rule under the wordmark — edge-faded hairlines + soft rose bloom */
     {
         const float barY = 118.0f + brandYOffset * 0.3f;
         const float mid = W * 0.5f;
@@ -263,7 +261,6 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
     TextHelper& title = BindFontHelper(s_title, s_titleFont, displayFont, sprite, 52, bodyText);
     TextHelper& script = BindFontHelper(s_script, s_scriptFont, scriptFont, sprite, 48, bodyText);
 
-    /* Hero: racing condensed + intimate script */
     title.SetDisplaySize(46);
     DrawCenteredShadow(title, L"STUNT CAR RACER", static_cast<int>(22.0f + brandYOffset), 0.97f, 0.95f, 0.92f,
                        brandAlpha, 2);
@@ -280,15 +277,23 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
     const wchar_t* safePack = packName ? packName : L"Classic";
 
     title.SetDisplaySize(36);
-    DrawCenteredShadow(title, safeTrack, 286, 0.99f, 0.97f, 0.95f, 0.98f, 2);
+    DrawCenteredShadow(title, safeTrack, 278, 0.99f, 0.97f, 0.95f, 0.98f, 2);
+
+    if (classicDivision >= 1 && classicDivision <= 4) {
+        static const wchar_t* kRoman[] = {L"", L"I", L"II", L"III", L"IV"};
+        std::wstringstream ss;
+        ss << L"Division  " << kRoman[classicDivision];
+        script.SetDisplaySize(30);
+        DrawCenteredShadow(script, ss.str(), 318, 0.95f, 0.72f, 0.48f, 0.92f, 1);
+    }
 
     bodyText.SetDisplaySize(13);
     {
         std::wstringstream ss;
         ss << safePack << L" pack";
         if (superLeague)
-            ss << L"  |  Super League";
-        DrawCenteredShadow(bodyText, ss.str(), 322, 0.78f, 0.68f, 0.70f, 0.95f, 1);
+            ss << L"  ·  Super League";
+        DrawCenteredShadow(bodyText, ss.str(), classicDivision >= 1 ? 348 : 322, 0.78f, 0.68f, 0.70f, 0.95f, 1);
     }
 
     title.SetDisplaySize(24);
@@ -309,7 +314,7 @@ void DrawTrackMenuBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* s
 
 void DrawTrackPreviewBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font* scriptFont, GLuint sprite,
                            const wchar_t* trackName, const wchar_t* packName, bool superLeague, bool multiplayer,
-                           long opponentCount, double timeSeconds) {
+                           long opponentCount, long classicDivision, double timeSeconds) {
     const float W = static_cast<float>(MenuProjectionWidth());
     const float H = 480.0f;
 
@@ -349,16 +354,24 @@ void DrawTrackPreviewBrand(TextHelper& bodyText, TTF_Font* displayFont, TTF_Font
     title.SetDisplaySize(42);
     DrawCenteredShadow(title, safeTrack, 42, 0.98f, 0.96f, 0.93f, brandAlpha, 2);
 
+    if (classicDivision >= 1 && classicDivision <= 4) {
+        static const wchar_t* kRoman[] = {L"", L"I", L"II", L"III", L"IV"};
+        std::wstringstream ss;
+        ss << L"Division  " << kRoman[classicDivision];
+        script.SetDisplaySize(26);
+        DrawCenteredShadow(script, ss.str(), 84, 0.95f, 0.72f, 0.48f, brandAlpha * 0.95f, 1);
+    }
+
     bodyText.SetDisplaySize(13);
     {
         std::wstringstream ss;
         ss << safePack << L" pack";
         if (superLeague)
-            ss << L"  |  Super League";
-        DrawCenteredShadow(bodyText, ss.str(), 84, 0.78f, 0.70f, 0.72f, brandAlpha * 0.95f, 1);
+            ss << L"  ·  Super League";
+        DrawCenteredShadow(bodyText, ss.str(), classicDivision >= 1 ? 112 : 84, 0.78f, 0.70f, 0.72f, brandAlpha * 0.95f,
+                           1);
     }
 
-    /* Setup rows — single-player only (multiplayer toggle temporarily removed). */
     bodyText.SetDisplaySize(15);
     {
         long n = opponentCount;

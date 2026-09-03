@@ -717,6 +717,32 @@ const WCHAR* GetTrackPackName(void) { return kTrackPackNames[gTrackPack]; }
 
 long IsUnlimitedBoostEnabled(void) { return (gTrackPack == TRACK_PACK_LOOPS) ? TRUE : FALSE; }
 
+/*
+ * Amiga practice division → road.ID (TAB.648c2 after eori #3 on menu index).
+ * Division 1: Ski Jump, Draw Bridge
+ * Division 2: High Jump, Roller Coaster
+ * Division 3: Stepping Stones, Big Ramp
+ * Division 4: Little Ramp, Hump Back
+ */
+static const long kClassicDivisionTracks[NUM_TRACK_DIVISIONS][TRACKS_PER_DIVISION] = {
+    {SKI_JUMP, DRAW_BRIDGE},
+    {HIGH_JUMP, ROLLER_COASTER},
+    {STEPPING_STONES, BIG_RAMP},
+    {LITTLE_RAMP, HUMP_BACK},
+};
+
+long GetClassicDivisionNumber(long trackId) {
+    if (gTrackPack != TRACK_PACK_CLASSIC || trackId < 0)
+        return 0;
+    for (long d = 0; d < NUM_TRACK_DIVISIONS; ++d) {
+        for (long t = 0; t < TRACKS_PER_DIVISION; ++t) {
+            if (kClassicDivisionTracks[d][t] == trackId)
+                return d + 1;
+        }
+    }
+    return 0;
+}
+
 /*    ======================================================================================= */
 /*    Function:        GetPieceAngleAndTemplate                                                */
 /*                                                                                            */
