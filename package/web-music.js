@@ -1,6 +1,6 @@
 /**
- * Web music: SNDH (ym2149-wasm) for menu; pre-rendered Amiga race OGG for in-game.
- * Native builds use libpsgplay (menu) + stb_vorbis race OGG (Blood Money ingame).
+ * Web music: random Hans Zimmer playlist (F1 / Three Laps) for menu and race.
+ * Falls back to paths under data/Music/Playlist/ when present in the web package.
  */
 import initYm2149, { Ym2149Player } from './ym2149/ym2149_wasm.js';
 
@@ -12,24 +12,42 @@ const GAME_MODE = {
   GAME_OVER: 3,
 };
 
+const PLAYLIST = [
+  {
+    label: 'F1',
+    paths: ['data/Music/Playlist/F1.ogg', '/data/Music/Playlist/F1.ogg'],
+  },
+  {
+    label: 'Three Laps Is A Lifetime',
+    paths: [
+      'data/Music/Playlist/Three_Laps_Is_A_Lifetime.ogg',
+      '/data/Music/Playlist/Three_Laps_Is_A_Lifetime.ogg',
+    ],
+  },
+];
+
 const TRACKS = {
-  menu: {
-    paths: [
-      'data/Music/Menu/Blood_Money.sndh',
-      '/data/Music/Menu/Blood_Money.sndh',
-    ],
-    subtune: 1,
-    gain: 0.35,
-  },
-  race: {
-    kind: 'ogg',
-    paths: [
-      'data/Music/Race/Blood_Money.ingame.ogg',
-      '/data/Music/Race/Blood_Money.ingame.ogg',
-    ],
-    gain: 0.49,
-  },
+  menu: { kind: 'ogg', gain: 0.4 },
+  race: { kind: 'ogg', gain: 0.49 },
 };
+
+let lastPlaylistIndex = -1;
+
+function pickPlaylistEntry() {
+  if (PLAYLIST.length === 0) {
+    return null;
+  }
+  if (PLAYLIST.length === 1) {
+    lastPlaylistIndex = 0;
+    return PLAYLIST[0];
+  }
+  let index = Math.floor(Math.random() * PLAYLIST.length);
+  if (index === lastPlaylistIndex) {
+    index = (index + 1) % PLAYLIST.length;
+  }
+  lastPlaylistIndex = index;
+  return PLAYLIST[index];
+}
 
 let ymReady = null;
 let musicEnabled = true;
@@ -204,11 +222,21 @@ async function startOggTrack(spec) {
     return false;
   }
 
-  const bytes = await fetchBinary(spec.paths);
+  const entry = pickPlaylistEntry();
+  if (!entry) {
+    return false;
+  }
+
+  const bytes = await fetchBinary(entry.paths);
   const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
-  source.loop = true;
+  source.loop = false;
+  source.onended = () => {
+    if (activeTrackKey) {
+      void startTrack(activeTrackKey, true);
+    }
+  };
   const gainNode = ctx.createGain();
   gainNode.gain.value = spec.gain;
   source.connect(gainNode);
@@ -216,9 +244,8 @@ async function startOggTrack(spec) {
   source.start(0);
   oggSource = source;
   oggGain = gainNode;
-  activeTrackKey = 'race';
   pendingRetry = false;
-  console.log('SCRWebMusic: playing Amiga race track (Blood Money ingame)');
+  console.log(`SCRWebMusic: playing ${entry.label}`);
   return true;
 }
 
@@ -239,8 +266,12 @@ function trackKeyForMode(mode) {
   return null;
 }
 
-async function startTrack(trackKey) {
-  if (activeTrackKey === trackKey && ((ymPlayer && audioNode) || (trackKey === 'race' && oggSource))) {
+async function startTrack(trackKey, forceRestart = false) {
+  if (
+    !forceRestart &&
+    activeTrackKey === trackKey &&
+    ((ymPlayer && audioNode) || oggSource)
+  ) {
     return true;
   }
 
@@ -256,6 +287,7 @@ async function startTrack(trackKey) {
   }
 
   if (spec.kind === 'ogg') {
+    activeTrackKey = trackKey;
     return startOggTrack(spec);
   }
 

@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <deque>
 #include <vector>
 
@@ -18,14 +20,19 @@ extern "C" {
 #include "stb_vorbis.c"
 #endif
 
-static const char* kMenuMusicPath = "data/Music/Menu/Blood_Money.sndh";
 #if defined(STUNT_OGG_RACE_MUSIC)
-static const char* kRaceOggPath = "data/Music/Race/Blood_Money.ingame.ogg";
+static const char* kPlaylistPaths[] = {
+    "data/Music/Playlist/F1.ogg",
+    "data/Music/Playlist/Three_Laps_Is_A_Lifetime.ogg",
+};
+static const int kPlaylistCount = static_cast<int>(sizeof(kPlaylistPaths) / sizeof(kPlaylistPaths[0]));
 #else
+static const char* kMenuMusicPath = "data/Music/Menu/Blood_Money.sndh";
 static const char* kRaceMusicPath = "data/Music/Race/Wings_of_Death_STe.sndh";
+static const int kMenuSubtune = 1;
 static const int kRaceSubtune = 1;
 #endif
-static const int kMenuSubtune = 1;
+
 static const int kSampleRate = 44100;
 static const size_t kPumpChunkFrames = 4096;
 static const size_t kTargetQueuedFrames = 22050; /* ~0.5 s */
@@ -37,27 +44,29 @@ enum ActiveMusicEngine {
     MUSIC_ENGINE_OGG,
 };
 
-static std::vector<uint8_t> g_menu_sndh;
 #if !defined(STUNT_OGG_RACE_MUSIC)
+static std::vector<uint8_t> g_menu_sndh;
 static std::vector<uint8_t> g_race_sndh;
-#endif
 static const std::vector<uint8_t>* g_active_sndh = NULL;
 static int g_active_subtune = 1;
+#endif
 static struct psgplay* g_psgplay = NULL;
 #if defined(STUNT_OGG_RACE_MUSIC)
-static stb_vorbis* g_race_vorbis = NULL;
-static bool g_race_ogg_ready = false;
+static stb_vorbis* g_ogg = NULL;
+static int g_last_playlist_index = -1;
+static const char* g_active_ogg_path = NULL;
 #endif
 static ActiveMusicEngine g_active_engine = MUSIC_ENGINE_NONE;
 static SDL_mutex* g_music_mutex = NULL;
 static std::deque<float> g_music_queue;
-static const float kMenuMusicGain = 0.35f;
+static const float kMenuMusicGain = 0.40f;
 static const float kRaceMusicGain = 0.45f * 0.4f * 1.3f * 1.5f;
 static bool g_ready = false;
 static bool g_music_enabled = true;
 static GameModeType g_last_music_mode = TRACK_MENU;
 static float g_music_gain = kMenuMusicGain;
 
+#if !defined(STUNT_OGG_RACE_MUSIC)
 static bool LoadBinaryFile(const char* path, std::vector<uint8_t>& out) {
     FILE* file = fopen(path, "rb");
     if (!file) {
@@ -91,6 +100,7 @@ static bool LoadBinaryFile(const char* path, std::vector<uint8_t>& out) {
 
     return true;
 }
+#endif
 
 static void StopPsgplayLocked() {
     if (g_psgplay) {
@@ -101,48 +111,75 @@ static void StopPsgplayLocked() {
 
 #if defined(STUNT_OGG_RACE_MUSIC)
 static void StopOggPlaybackLocked() {
-    if (g_race_vorbis) {
-        stb_vorbis_close(g_race_vorbis);
-        g_race_vorbis = NULL;
-        g_race_ogg_ready = false;
+    if (g_ogg) {
+        stb_vorbis_close(g_ogg);
+        g_ogg = NULL;
     }
+    g_active_ogg_path = NULL;
 }
 
-static bool InitRaceOggLocked() {
-    if (g_race_ogg_ready && g_race_vorbis) {
-        return true;
+static int PickRandomPlaylistIndex() {
+    if (kPlaylistCount <= 0) {
+        return -1;
     }
+    if (kPlaylistCount == 1) {
+        return 0;
+    }
+    int index = static_cast<int>(std::rand() % kPlaylistCount);
+    if (index == g_last_playlist_index) {
+        index = (index + 1) % kPlaylistCount;
+    }
+    return index;
+}
 
+static bool OpenOggPathLocked(const char* path) {
     StopOggPlaybackLocked();
 
     int error = 0;
-    g_race_vorbis = stb_vorbis_open_filename(kRaceOggPath, &error, NULL);
-    if (!g_race_vorbis) {
-        printf("GameMusic: failed to open race OGG %s (stb error %d)\n", kRaceOggPath, error);
+    g_ogg = stb_vorbis_open_filename(path, &error, NULL);
+    if (!g_ogg) {
+        printf("GameMusic: failed to open OGG %s (stb error %d)\n", path, error);
         return false;
     }
 
     int16_t probe[4];
-    const int probe_frames =
-        stb_vorbis_get_samples_short_interleaved(g_race_vorbis, 2, probe, 4);
+    const int probe_frames = stb_vorbis_get_samples_short_interleaved(g_ogg, 2, probe, 4);
     if (probe_frames <= 0) {
-        printf("GameMusic: race OGG produced no audio samples\n");
+        printf("GameMusic: OGG produced no audio samples: %s\n", path);
         StopOggPlaybackLocked();
         return false;
     }
-    stb_vorbis_seek_start(g_race_vorbis);
-
-    g_race_ogg_ready = true;
-    printf("GameMusic: loaded Amiga race track (Blood Money ingame OGG)\n");
+    stb_vorbis_seek_start(g_ogg);
+    g_active_ogg_path = path;
     return true;
 }
 
-static bool StartRaceOggPlaybackLocked() {
-    if (!InitRaceOggLocked()) {
+static bool StartRandomOggPlaybackLocked() {
+    const int preferred = PickRandomPlaylistIndex();
+    if (preferred < 0) {
         return false;
     }
-    stb_vorbis_seek_start(g_race_vorbis);
-    return true;
+
+    for (int attempt = 0; attempt < kPlaylistCount; ++attempt) {
+        const int index = (preferred + attempt) % kPlaylistCount;
+        if (OpenOggPathLocked(kPlaylistPaths[index])) {
+            g_last_playlist_index = index;
+            printf("GameMusic: playing %s\n", kPlaylistPaths[index]);
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool PlaylistAvailable() {
+    for (int i = 0; i < kPlaylistCount; ++i) {
+        FILE* file = fopen(kPlaylistPaths[i], "rb");
+        if (file) {
+            fclose(file);
+            return true;
+        }
+    }
+    return false;
 }
 #endif
 
@@ -152,7 +189,9 @@ static void StopPlaybackLocked() {
     StopOggPlaybackLocked();
 #endif
     g_active_engine = MUSIC_ENGINE_NONE;
+#if !defined(STUNT_OGG_RACE_MUSIC)
     g_active_sndh = NULL;
+#endif
     g_music_queue.clear();
 }
 
@@ -174,6 +213,13 @@ static void QueuePsgplayChunk(const psgplay_stereo* samples, size_t count) {
 
 static bool StartMenuPlaybackLocked() {
     StopPlaybackLocked();
+#if defined(STUNT_OGG_RACE_MUSIC)
+    if (!StartRandomOggPlaybackLocked()) {
+        return false;
+    }
+    g_active_engine = MUSIC_ENGINE_OGG;
+    return true;
+#else
     g_active_sndh = &g_menu_sndh;
     g_active_subtune = kMenuSubtune;
     g_psgplay = psgplay_init(g_menu_sndh.data(), g_menu_sndh.size(), kMenuSubtune, kSampleRate);
@@ -184,16 +230,16 @@ static bool StartMenuPlaybackLocked() {
     }
     g_active_engine = MUSIC_ENGINE_PSGPLAY;
     return true;
+#endif
 }
 
 static bool StartRacePlaybackLocked() {
     StopPlaybackLocked();
 #if defined(STUNT_OGG_RACE_MUSIC)
-    if (!StartRaceOggPlaybackLocked()) {
+    if (!StartRandomOggPlaybackLocked()) {
         return false;
     }
     g_active_engine = MUSIC_ENGINE_OGG;
-    g_active_sndh = NULL;
     return true;
 #else
     g_active_sndh = &g_race_sndh;
@@ -244,15 +290,14 @@ static void PumpPsgplayLocked() {
 
 #if defined(STUNT_OGG_RACE_MUSIC)
 static void PumpOggLocked() {
-    if (!g_race_vorbis) {
+    if (!g_ogg) {
         return;
     }
 
     int16_t chunk[kPumpChunkFrames * 2];
     int idle_loops = 0;
     while (g_music_queue.size() / 2 < kTargetQueuedFrames) {
-        const int frames =
-            stb_vorbis_get_samples_short_interleaved(g_race_vorbis, 2, chunk, kPumpChunkFrames * 2);
+        const int frames = stb_vorbis_get_samples_short_interleaved(g_ogg, 2, chunk, kPumpChunkFrames * 2);
         if (frames > 0) {
             idle_loops = 0;
             for (int i = 0; i < frames; ++i) {
@@ -262,15 +307,17 @@ static void PumpOggLocked() {
             continue;
         }
 
-        if (stb_vorbis_seek_start(g_race_vorbis) != 0) {
-            printf("GameMusic: failed to loop race OGG\n");
+        /* End of track: pick another playlist entry at random. */
+        if (!StartRandomOggPlaybackLocked()) {
+            printf("GameMusic: failed to continue playlist\n");
             StopPlaybackLocked();
             return;
         }
+        g_active_engine = MUSIC_ENGINE_OGG;
 
         ++idle_loops;
         if (idle_loops >= 4) {
-            printf("GameMusic: race OGG decoder stalled\n");
+            printf("GameMusic: OGG playlist stalled\n");
             StopPlaybackLocked();
             return;
         }
@@ -324,17 +371,17 @@ void GameMusic_Init(void) {
         return;
     }
 
+    std::srand(static_cast<unsigned>(std::time(NULL)) ^ static_cast<unsigned>(SDL_GetTicks()));
+
+#if defined(STUNT_OGG_RACE_MUSIC)
+    if (!PlaylistAvailable()) {
+        printf("GameMusic: playlist missing under data/Music/Playlist/\n");
+        return;
+    }
+#else
     if (!LoadBinaryFile(kMenuMusicPath, g_menu_sndh)) {
         return;
     }
-
-#if defined(STUNT_OGG_RACE_MUSIC)
-    if (!InitRaceOggLocked()) {
-        g_menu_sndh.clear();
-        return;
-    }
-    StopOggPlaybackLocked();
-#else
     if (!LoadBinaryFile(kRaceMusicPath, g_race_sndh)) {
         g_menu_sndh.clear();
         return;
@@ -343,8 +390,8 @@ void GameMusic_Init(void) {
 
     g_music_mutex = SDL_CreateMutex();
     if (!g_music_mutex) {
-        g_menu_sndh.clear();
 #if !defined(STUNT_OGG_RACE_MUSIC)
+        g_menu_sndh.clear();
         g_race_sndh.clear();
 #endif
         return;
@@ -352,7 +399,7 @@ void GameMusic_Init(void) {
 
     g_ready = true;
 #if defined(STUNT_OGG_RACE_MUSIC)
-    printf("GameMusic: menu SNDH + Amiga race OGG ready\n");
+    printf("GameMusic: Zimmer playlist ready (F1 / Three Laps, random menu+race)\n");
 #else
     printf("GameMusic: loaded menu and race SNDH tracks\n");
 #endif
@@ -372,8 +419,8 @@ void GameMusic_Shutdown(void) {
         g_music_mutex = NULL;
     }
 
-    g_menu_sndh.clear();
 #if !defined(STUNT_OGG_RACE_MUSIC)
+    g_menu_sndh.clear();
     g_race_sndh.clear();
 #endif
     g_ready = false;

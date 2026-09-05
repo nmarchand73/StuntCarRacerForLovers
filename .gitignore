@@ -35,3 +35,7 @@ SCRlog.txt
 !.dev.vars.example
 .env*
 !.env.example
+
+# Local commercial soundtrack (do not publish)
+data/Music/Playlist/*.ogg
+data/Music/Playlist/*.mp3

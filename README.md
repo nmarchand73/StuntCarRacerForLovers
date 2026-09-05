@@ -53,7 +53,7 @@ It is **not** a modern racing sim. No PBR, no licensed cars, no battle pass. It 
 - **Speed feel** — FOV and motion blur that kick in as you carry speed (<kbd>I</kbd>).
 - **Enhanced Look** — a denser SCR world (horizon blocks, rails, flags, drones) that still reads as Amiga art, not realism (<kbd>O</kbd>).
 - **Four track packs** — Classic, TNT, Original, and Loops — dozens of circuits to cycle from the menu.
-- **Soundtrack** — *Blood Money* (Atari ST) on the menu; Ray Norrish’s *Blood Money* ingame (Amiga, uade-rendered OGG) during races; mute menu music with <kbd>N</kbd>.
+- **Soundtrack** — random Hans Zimmer playlist (*F1* / *Three Laps Is A Lifetime*) on the menu and in races (local `data/Music/Playlist/`); mute with <kbd>N</kbd>.
 
 ---
 
