@@ -141,7 +141,7 @@ bool IsAudioEnabled(void) {
     return kEnableAudioInDebug;
 }
 
-static bool g_engineSoundEnabled = true;
+static bool g_engineSoundEnabled = false;
 static void RestartEngineAudioBuffers(bool resetEngineModel);
 
 bool IsEngineSoundEnabled(void) {
@@ -256,7 +256,7 @@ long VALUE1 = 1, VALUE2 = 2, VALUE3 = 3;
 #endif
 
 extern long TrackID;
-extern long boostReserve, boostUnit, StandardBoost, SuperBoost;
+extern long boostReserve, boostReserveCap, boostUnit, boostRegenUnit, StandardBoost, SuperBoost;
 extern long INITIALISE_PLAYER;
 extern bool raceFinished, raceWon;
 extern long lapNumber[];
@@ -415,13 +415,13 @@ bool DSSetMode() {
     if ((WreckSoundBuffer = MakeSoundBuffer(ds, L"WRECK")) == NULL)
         return FALSE;
     WreckSoundBuffer->SetPan(DSBPAN_RIGHT);
-    WreckSoundBuffer->SetVolume(AmigaVolumeToMixerGain(64));
+    WreckSoundBuffer->SetVolume(AmigaSfxVolumeToMixerGain(64));
 
     if ((HitCarSoundBuffer = MakeSoundBuffer(ds, L"HITCAR")) == NULL)
         return FALSE;
     HitCarSoundBuffer->SetFrequency(AMIGA_PAL_HZ / 238);
     HitCarSoundBuffer->SetPan(DSBPAN_RIGHT);
-    HitCarSoundBuffer->SetVolume(AmigaVolumeToMixerGain(56));
+    HitCarSoundBuffer->SetVolume(AmigaSfxVolumeToMixerGain(56));
 
     if ((GroundedSoundBuffer = MakeSoundBuffer(ds, L"GROUNDED")) == NULL)
         return FALSE;
@@ -432,18 +432,18 @@ bool DSSetMode() {
         return FALSE;
     CreakSoundBuffer->SetFrequency(AMIGA_PAL_HZ / 238);
     CreakSoundBuffer->SetPan(DSBPAN_RIGHT);
-    CreakSoundBuffer->SetVolume(AmigaVolumeToMixerGain(64));
+    CreakSoundBuffer->SetVolume(AmigaSfxVolumeToMixerGain(64));
 
     if ((SmashSoundBuffer = MakeSoundBuffer(ds, L"SMASH")) == NULL)
         return FALSE;
     SmashSoundBuffer->SetFrequency(AMIGA_PAL_HZ / 280);
     SmashSoundBuffer->SetPan(DSBPAN_LEFT);
-    SmashSoundBuffer->SetVolume(AmigaVolumeToMixerGain(64));
+    SmashSoundBuffer->SetVolume(AmigaSfxVolumeToMixerGain(64));
 
     if ((OffRoadSoundBuffer = MakeSoundBuffer(ds, L"OFFROAD")) == NULL)
         return FALSE;
     OffRoadSoundBuffer->SetPan(DSBPAN_RIGHT);
-    OffRoadSoundBuffer->SetVolume(AmigaVolumeToMixerGain(64));
+    OffRoadSoundBuffer->SetVolume(AmigaSfxVolumeToMixerGain(64));
 
     if ((EngineSoundBuffers[0] = MakeSoundBuffer(ds, L"TICKOVER")) == NULL)
         return FALSE;
@@ -1883,7 +1883,9 @@ static void QueueMultiplayerCarCollisionImpulsesForStep(void) {
 static void SetBoostStartStateForInstance(long instanceIndex, long reserve) {
     const long previousInstance = PushCarBehaviourInstance(instanceIndex);
     boostReserve = reserve;
+    boostReserveCap = reserve;
     boostUnit = 0;
+    boostRegenUnit = 0;
     PopCarBehaviourInstance(previousInstance);
 }
 

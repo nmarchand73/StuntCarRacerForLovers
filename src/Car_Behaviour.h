@@ -72,6 +72,8 @@ extern void LimitViewpointYForInstance(long instanceIndex, long* y);
 extern void ProjectCarRenderPositionToRoadNormalForInstance(long instanceIndex, long* x, long* y, long* z);
 
 extern long AmigaVolumeToMixerGain(long amiga_volume);
+/** SFX path: Amiga volume scaled to 70% (−30%). */
+extern long AmigaSfxVolumeToMixerGain(long amiga_volume);
 
 extern long CalculateDisplaySpeed(void);
 
@@ -94,7 +96,7 @@ extern void AdvanceFourteenFrameTiming(void);
 extern DWORD ApplyAmigaKeyboardInputCoupling(DWORD input);
 /** Advance fourteen-frame / boost-drain cadence at Amiga ~50 Hz (after car.control). */
 extern void AccumulateAmigaFrameTiming(double stepSeconds);
-/** Amiga init: triangular BCD sum over the track boost byte (reference/StuntCarRacer.s standard.league3). */
+/** Amiga init: BCD encode of the track boost byte (abcd +1, B times → boost.max.units). */
 extern long ComputeAmigaInitialBoostReserve(long trackBoostByte);
 /** Decode packed BCD boost.reserve for HUD (tens + ones nibbles). */
 extern long FormatBoostReserveForHud(long bcdReserve);

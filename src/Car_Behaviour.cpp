@@ -118,6 +118,9 @@ long nholes = 0;
 long car_collision_x_acceleration, car_collision_y_acceleration, car_collision_z_acceleration;
 
 long boostReserve = 0, boostUnit = 0;
+long boostReserveCap = 0;
+long boostRegenUnit = 0;
+static bool g_amigaBoostRegenDue = false;
 long playerLapNumber;
 
 static CXBOXController P1Controller(1);
@@ -327,6 +330,8 @@ static long AmigaRecordingFrame = 0;
 static void CarControl(DWORD input);
 static void BoostPower(long boost_flag, long accelerate, long brake);
 static long AmigaBcdDecrementBoostReserve(long bcdReserve);
+static long AmigaBcdIncrementBoostReserve(long bcdReserve, long bcdCap);
+static void ApplySlopeBoostRegen(void);
 
 static void CarMovement(void);
 static long GetPieceUsingMap(long x, long z, long* piece_out);
@@ -1002,26 +1007,16 @@ static void BoostPower(long boost_flag, long accel_flag, long brake_flag) {
 }
 
 long ComputeAmigaInitialBoostReserve(long trackBoostByte) {
-    unsigned char sum = 0;
-    unsigned char addend = 1;
+    /* Amiga standard.league3:
+     *   move.b #0,d0 / move.b #1,d3
+     *   .add: abcd.b d3,d0 ; subq.b #1,d1 ; bne .add
+     * So boost.reserve / boost.max.units = decimal track B byte encoded as BCD
+     * (NOT a triangular 1+2+3… sum). */
     long remaining = trackBoostByte & 0xff;
-
-    while (remaining > 0) {
-        int lo = (sum & 0x0f) + (addend & 0x0f);
-        int hi = (sum >> 4) + (addend >> 4);
-        if (lo > 9) {
-            lo -= 10;
-            hi += 1;
-        }
-        if (hi > 9) {
-            hi -= 10;
-        }
-        sum = static_cast<unsigned char>(((hi & 0x0f) << 4) | (lo & 0x0f));
-        ++addend;
-        --remaining;
+    if (remaining > 99) {
+        remaining = 99;
     }
-
-    return static_cast<long>(sum);
+    return ((remaining / 10) << 4) | (remaining % 10);
 }
 
 long FormatBoostReserveForHud(long bcdReserve) {
@@ -1040,6 +1035,77 @@ static long AmigaBcdDecrementBoostReserve(long bcdReserve) {
         return 0;
     }
     return ((hi & 0x0f) << 4) | (lo & 0x0f);
+}
+
+static long AmigaBcdIncrementBoostReserve(long bcdReserve, long bcdCap) {
+    if (FormatBoostReserveForHud(bcdReserve) >= FormatBoostReserveForHud(bcdCap)) {
+        return bcdCap & 0xff;
+    }
+    long lo = (bcdReserve & 0x0f) + 1;
+    long hi = (bcdReserve >> 4) & 0x0f;
+    if (lo > 9) {
+        lo = 0;
+        hi += 1;
+    }
+    if (hi > 9) {
+        return bcdCap & 0xff;
+    }
+    const long next = ((hi & 0x0f) << 4) | (lo & 0x0f);
+    if (FormatBoostReserveForHud(next) > FormatBoostReserveForHud(bcdCap)) {
+        return bcdCap & 0xff;
+    }
+    return next;
+}
+
+/* Slope-scaled boost regen (remake): flat still refills, downhill faster.
+ * Full rate matches drain when gravity_z >= kBoostRegenFullGravityZ.
+ * Flat (gravity_z ~= 0) runs at kBoostRegenFlatNumer/256 of drain rate.
+ * Climbing (gravity_z below -threshold) does not refill. */
+static const long kBoostRegenFullGravityZ = 160;
+static const long kBoostRegenFlatNumer = 72; /* ~28% of drain rate on flat */
+static const long kBoostRegenClimbCutoff = -48;
+
+static void ApplySlopeBoostRegen(void) {
+    if (IsUnlimitedBoostEnabled() || WRECKED || on_chains || !touching_road) {
+        return;
+    }
+    if (boost_activated || boostReserveCap <= 0) {
+        return;
+    }
+    if (FormatBoostReserveForHud(boostReserve) >= FormatBoostReserveForHud(boostReserveCap)) {
+        return;
+    }
+    if (!g_amigaBoostRegenDue || fourteen_frames_elapsed != 0) {
+        return;
+    }
+
+    g_amigaBoostRegenDue = false;
+
+    long strength; /* 0..256 — fraction of drain-equivalent regen this tick */
+    if (gravity_z_acceleration <= kBoostRegenClimbCutoff) {
+        return; /* uphill: no regen */
+    }
+    if (gravity_z_acceleration <= 0) {
+        strength = kBoostRegenFlatNumer; /* flat / slight climb above cutoff */
+    } else if (gravity_z_acceleration >= kBoostRegenFullGravityZ) {
+        strength = 256; /* steep descent: same cadence as drain */
+    } else {
+        strength = kBoostRegenFlatNumer +
+                   ((gravity_z_acceleration * (256 - kBoostRegenFlatNumer)) / kBoostRegenFullGravityZ);
+    }
+
+    /* boostRegenUnit accumulates 1/256 units of a drain tick; need boost_unit_value
+     * full ticks (×256) before +1 BCD — at strength 256 this matches drain rate. */
+    boostRegenUnit += strength;
+    const long tickCost = boost_unit_value * 256;
+    while (boostRegenUnit >= tickCost) {
+        boostRegenUnit -= tickCost;
+        boostReserve = AmigaBcdIncrementBoostReserve(boostReserve, boostReserveCap);
+        if (FormatBoostReserveForHud(boostReserve) >= FormatBoostReserveForHud(boostReserveCap)) {
+            boostRegenUnit = 0;
+            break;
+        }
+    }
 }
 
 void BeginLogicTickDamagePeriod(void) {
@@ -1073,6 +1139,7 @@ static void CarMovement(void) {
 
     SetWheelRotationSpeed();
     CalculateGravityAcceleration();
+    ApplySlopeBoostRegen();
     CarCollisionDetection();
 
     //if (B.1bb72 != 0)        // always set
@@ -2065,6 +2132,7 @@ void ResetFourteenFrameTiming(void) {
     fourteen_frames_elapsed = 0;
     g_amigaFrameAccumSeconds = 0.0;
     g_amigaBoostDrainDue = false;
+    g_amigaBoostRegenDue = false;
 }
 
 void AdvanceFourteenFrameTiming(void) {
@@ -2086,6 +2154,7 @@ void AccumulateAmigaFrameTiming(double stepSeconds) {
         g_amigaFrameAccumSeconds -= kAmigaFrameSeconds;
         AdvanceFourteenFrameTiming();
         g_amigaBoostDrainDue = true;
+        g_amigaBoostRegenDue = true;
         AdvanceLapTimersAmigaFrame();
     }
 }
@@ -2195,7 +2264,7 @@ static void CarCollisionDetection(void) {
         amiga_volume = 64;
 
     if (IsAudioEnabled() && GroundedSoundBuffer) {
-        GroundedSoundBuffer->SetVolume(AmigaVolumeToMixerGain(amiga_volume));
+        GroundedSoundBuffer->SetVolume(AmigaSfxVolumeToMixerGain(amiga_volume));
 
         if (grounded_delay == 0) {
             if (!GroundedSoundBuffer->IsPlaying()) {
@@ -3613,6 +3682,11 @@ long AmigaVolumeToMixerGain(long amiga_volume) {
     return (directx_volume[amiga_volume]);
 }
 
+long AmigaSfxVolumeToMixerGain(long amiga_volume) {
+    /* Default SFX level is 30% quieter than the raw Amiga volume curve. */
+    return AmigaVolumeToMixerGain((amiga_volume * 7) / 10);
+}
+
 /*    ======================================================================================= */
 /*    Function:        PositionCarAbovePiece                                                    */
 /*                                                                                            */
@@ -3878,6 +3952,8 @@ static int pendingEngineSoundIndexCount = 0;
     X(long, car_collision_z_acceleration)           \
     X(long, boostReserve)                           \
     X(long, boostUnit)                              \
+    X(long, boostReserveCap)                        \
+    X(long, boostRegenUnit)                         \
     X(long, playerLapNumber)                        \
     X(long, player_x)                               \
     X(long, player_z)                               \
@@ -4302,20 +4378,19 @@ static long DistributeStepValue(long full_step_value, int step_divisor, long* st
 
 static void AdvanceWheelAngleSubstep(long wheel_speed, int step_divisor, long* wheel_step_remainder_in_out,
                                      long* wheel_angle_in_out) {
-    // Amiga update.wheel.rotation uses the low byte of wheel.rotation.speed to
-    // drive frame-count carry. Encode that into our angle accumulator by stepping
-    // in 8.8-style units so (angle >> 16) tracks frame advances.
-    long speed_byte = (wheel_speed & 0xff);
-    // In the PC port physics ranges, wheel_speed is often quantized in 0x100 units,
-    // which would make the low byte always zero and freeze animation. Fall back to
-    // high byte in that case to preserve visible wheel rotation.
-    if ((speed_byte == 0) && (wheel_speed != 0))
-        speed_byte = ((wheel_speed >> 8) & 0xff);
-    long speed_step = speed_byte;
-    // Wheel rotation in the original runs on the render/audio frame path (~50 Hz), not the
-    // 0.14s logic reference path. Convert from logic-scale to frame-scale for substep updates.
-    // User tuning: slow wheel animation by 5x from current behavior.
-    const float wheel_step_scale = ResolveSubstepScale(step_divisor) * (7.0f / 1.0f);
+    // Amiga update.wheel.rotation adds the low byte of wheel.rotation.speed each
+    // ~50 Hz display frame. That low byte is often 0 once |z| crosses $800 (the
+    // high-speed formula packs into the high byte), which freezes or wildly
+    // desyncs cockpit wheel animation vs ground speed.
+    // Drive the animation from the high byte so spin stays proportional to the
+    // stored Amiga rotation word (smooth across the $800 threshold).
+    long speed_step = (wheel_speed >> 8) & 0xff;
+    if ((speed_step == 0) && (wheel_speed != 0))
+        speed_step = 1;
+
+    // Convert from logic-scale (reference 0.14 s) to Amiga display-frame scale:
+    // 50 Hz * 0.14 s = 7 frame-equivalents per logic tick.
+    const float wheel_step_scale = ResolveSubstepScale(step_divisor) * 7.0f;
     long wheel_step = DistributeStepValueWithScale(speed_step, wheel_step_scale, wheel_step_remainder_in_out);
 
     // Emulate original update.wheel.rotation:
@@ -4820,7 +4895,7 @@ PlayCreakSound:
         amiga_volume = 64;
 
     if (IsAudioEnabled() && CreakSoundBuffer) {
-        CreakSoundBuffer->SetVolume(AmigaVolumeToMixerGain(amiga_volume));
+        CreakSoundBuffer->SetVolume(AmigaSfxVolumeToMixerGain(amiga_volume));
         if (!CreakSoundBuffer->IsPlaying()) {
             CreakSoundBuffer->SetPan(ResolveSharedSfxPanForActiveCarInstance(DSBPAN_RIGHT));
             CreakSoundBuffer->SetCurrentPosition(0);
