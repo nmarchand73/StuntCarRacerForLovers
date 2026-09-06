@@ -5,7 +5,7 @@
 
 /** Presentation-only speed impression FX (FOV punch + edge vignette).
  * Driven mainly by forward acceleration / boost surge, not absolute speed.
- * Does not change physics. Toggle with I (P = pause, U = Amiga+ physics).
+ * Does not change physics. Toggle with I (P = pause; Amiga physics is locked on).
  */
 
 bool IsSpeedFeelEnabled(void);
